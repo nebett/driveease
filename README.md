@@ -1,6 +1,6 @@
-# DriveEase Prototype IMK
+# DriveEase – Prototype IMK
 
-Prototype akademik (bukan aplikasi resmi Google Drive) untuk tugas Interaksi Manusia dan Komputer. Semua data fiktif; tidak ada file yang dikirim ke server upload hanya simulasi.
+Prototype akademik (bukan aplikasi resmi Google Drive) untuk tugas Interaksi Manusia dan Komputer. Semua data fiktif; **tidak ada file yang dikirim ke server** – upload hanya simulasi.
 
 ## Struktur file
 ```
@@ -10,9 +10,9 @@ driveease/
 ├─ index.html
 ├─ README.md
 └─ src/
-   ├─ main.jsx      
-   ├─ index.css     
-   └─ App.jsx       
+   ├─ main.jsx      (titik masuk React)
+   ├─ index.css     (Tailwind + indikator fokus)
+   └─ App.jsx       (seluruh antarmuka & logika)
 ```
 
 ## Menjalankan

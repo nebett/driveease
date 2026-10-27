@@ -1,20 +1,29 @@
 @import "tailwindcss";
 
-@theme {
-  --color-brand: #E8A0BF;
-  --color-brand-hover: #D985AA;
-  --color-bg: #FFF8FB;
-  --color-side: #FFF0F5;
-  --color-line: #F0D5E0;
-  --color-sel: #FADCE8;
-  --color-ink: #49313D;
-  --color-sub: #795D6C;
-  --color-edge: #A57C95;   /* border input/tombol: kontras >= 3:1 */
-  --color-accent: #B8527F; /* ikon & aksen teks yang butuh kontras lebih */
+/* Tema default: Baby Pink */
+:root {
+  --c-brand: #E8A0BF; --c-brand-hover: #D985AA; --c-bg: #FFF8FB; --c-side: #FFF0F5; --c-card: #FFFFFF;
+  --c-line: #F0D5E0; --c-sel: #FADCE8; --c-ink: #49313D; --c-sub: #795D6C;
+  --c-edge: #A57C95; --c-accent: #B8527F; --c-onbrand: #3B2430; --c-ok: #166534; --c-bad: #991B1B;
+  color-scheme: light;
+}
+/* Mode Gelap */
+[data-theme="dark"] {
+  --c-brand: #E8A0BF; --c-brand-hover: #F0B8D0; --c-bg: #18151B; --c-side: #211B24; --c-card: #28212C;
+  --c-line: #443746; --c-sel: #44303F; --c-ink: #F8EDF3; --c-sub: #C8B7C4;
+  --c-edge: #8D7889; --c-accent: #F0A8C8; --c-onbrand: #3B2430; --c-ok: #86EFAC; --c-bad: #FCA5A5;
+  color-scheme: dark;
+}
+@theme inline {
+  --color-brand: var(--c-brand); --color-brand-hover: var(--c-brand-hover); --color-bg: var(--c-bg);
+  --color-side: var(--c-side); --color-card: var(--c-card); --color-line: var(--c-line); --color-sel: var(--c-sel);
+  --color-ink: var(--c-ink); --color-sub: var(--c-sub); --color-edge: var(--c-edge); --color-accent: var(--c-accent);
+  --color-onbrand: var(--c-onbrand); --color-ok: var(--c-ok); --color-bad: var(--c-bad);
 }
 
-body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--color-ink); background: var(--color-bg); }
-/* Indikator fokus keyboard yang selalu terlihat */
-:focus-visible { outline: 3px solid var(--color-ink); outline-offset: 2px; box-shadow: 0 0 0 5px #fff; }
-input[type="checkbox"], input[type="radio"] { accent-color: var(--color-accent); }
+html, body { overscroll-behavior-y: contain; } /* cegah pull-to-refresh bawaan browser */
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--c-ink); background: var(--c-bg); overflow-x: hidden; }
+/* Indikator fokus keyboard yang selalu terlihat di kedua tema */
+:focus-visible { outline: 3px solid var(--c-ink); outline-offset: 2px; box-shadow: 0 0 0 5px var(--c-bg); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--c-accent); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

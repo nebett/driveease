@@ -21,14 +21,19 @@ const typeOf = n => {
 }
 const STATUS = {
   ready: ['Siap diunggah', 'clock', 'text-sub'], uploading: ['Sedang mengunggah', 'upload', 'text-ink'],
-  success: ['Upload berhasil', 'check', 'text-emerald-800'], failed: ['Upload gagal', 'xcircle', 'text-red-800'], cancelled: ['Dibatalkan', 'ban', 'text-sub'],
+  success: ['Upload berhasil', 'check', 'text-ok'], failed: ['Upload gagal', 'xcircle', 'text-bad'], cancelled: ['Dibatalkan', 'ban', 'text-sub'],
 }
 const B = 'min-h-11 px-4 rounded-xl font-semibold inline-flex items-center gap-2 transition-colors '
-const PRIMARY = B + 'justify-center bg-brand text-ink shadow-sm hover:bg-brand-hover'
-const SECOND = B + 'justify-center border border-edge bg-white text-ink hover:bg-sel'
+const PRIMARY = B + 'justify-center bg-brand text-onbrand shadow-sm hover:bg-brand-hover'
+const SECOND = B + 'justify-center border border-edge bg-card text-ink hover:bg-sel'
 
 // Ikon SVG outline bergaya sama (24x24, garis 1.75) – tanpa library tambahan
 const P = {
+  refresh: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  menu: '<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
   folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -50,7 +55,7 @@ const P = {
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
 }
 function Icon({ n, size = 20, fill, className = '' }) {
-  return <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 24 24" fill={fill ? '#E8A0BF' : 'none'} stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={'shrink-0 ' + className} dangerouslySetInnerHTML={{ __html: P[n] }} />
+  return <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 24 24" style={{ fill: fill ? 'var(--c-brand)' : 'none' }} stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={'shrink-0 ' + className} dangerouslySetInnerHTML={{ __html: P[n] }} />
 }
 
 function Modal({ title, onClose, children }) {
@@ -62,7 +67,7 @@ function Modal({ title, onClose, children }) {
   }, [onClose])
   return (
     <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-3">
-      <div role="dialog" aria-modal="true" aria-labelledby={id} className="max-h-[92vh] w-full max-w-xl overflow-auto rounded-2xl bg-white p-5 shadow-xl">
+      <div role="dialog" aria-modal="true" aria-labelledby={id} className="max-h-[92vh] w-full max-w-xl overflow-auto rounded-2xl bg-card p-5 shadow-xl">
         <div className="mb-3 flex items-start justify-between gap-3">
           <h2 id={id} className="text-xl font-bold">{title}</h2>
           <button onClick={onClose} className={SECOND}>Tutup</button>
@@ -77,7 +82,10 @@ export default function App() {
   const [files, setFiles] = useState(seed)
   const [nav, setNav] = useState('files')
   const [q, setQ] = useState('')
-  const [grid, setGrid] = useState(false)
+  const [grid, setGrid] = useState(() => { try { return localStorage.getItem('driveease-view') === 'grid' } catch { return false } })
+  const [pull, setPull] = useState(0)
+  const [pulling, setPulling] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [menu, setMenu] = useState(null)
   const [dlg, setDlg] = useState(null)
   const [sel, setSel] = useState(null)
@@ -86,6 +94,8 @@ export default function App() {
   const [toast, setToast] = useState('')
   const [confirmPublic, setConfirmPublic] = useState(false)
   const [big, setBig] = useState(false)
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('driveease-theme') === 'dark' ? 'dark' : 'pink' } catch { return 'pink' } })
+  const [drawer, setDrawer] = useState(false)
   const [fname, setFname] = useState('')
   const [ferr, setFerr] = useState('')
   const [drag, setDrag] = useState(false)
@@ -94,6 +104,13 @@ export default function App() {
   const input = useRef()
 
   useEffect(() => { document.documentElement.style.fontSize = big ? '19px' : '16px' }, [big])
+  useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('driveease-theme', theme) } catch { /* abaikan */ } }, [theme])
+  useEffect(() => {
+    if (!drawer) return
+    const h = e => e.key === 'Escape' && setDrawer(false)
+    addEventListener('keydown', h)
+    return () => removeEventListener('keydown', h)
+  }, [drawer])
 
   // Simulasi progres upload (tidak ada server nyata)
   useEffect(() => {
@@ -120,6 +137,52 @@ export default function App() {
     })
   }, [ups])
 
+  useEffect(() => { try { localStorage.setItem('driveease-view', grid ? 'grid' : 'list') } catch { /* abaikan */ } }, [grid])
+
+  // Pull-to-refresh (hanya HP): aktif jika halaman di paling atas dan tidak ada dialog/upload/drag yang aktif
+  const blockRef = useRef(false), pullRef = useRef(0), busyRef = useRef(false)
+  blockRef.current = !!(dlg || sel || drawer || menu || drag || ups.some(u => u.status === 'uploading'))
+  useEffect(() => {
+    const THRESH = 64, MAXPULL = 96
+    const mq = matchMedia('(max-width: 767px)')
+    let sy = null, sx = 0, timer
+    const atTop = () => (document.scrollingElement?.scrollTop || 0) <= 0
+    const reset = () => { pullRef.current = 0; setPull(0); setPulling(false) }
+    const ts = e => {
+      sy = null
+      if (!mq.matches || blockRef.current || busyRef.current || e.touches.length !== 1 || !atTop()) return
+      sy = e.touches[0].clientY; sx = e.touches[0].clientX
+    }
+    const tm = e => {
+      if (sy === null) return
+      const dy = e.touches[0].clientY - sy
+      if (!atTop() || blockRef.current || e.touches.length !== 1) { sy = null; reset(); return }
+      if (dy <= 0) { if (pullRef.current) reset(); return }
+      if (!pullRef.current && Math.abs(e.touches[0].clientX - sx) > dy) { sy = null; return }
+      if (e.cancelable) e.preventDefault()
+      const v = Math.min(MAXPULL, dy * 0.5)
+      pullRef.current = v; setPull(v); setPulling(true)
+    }
+    const te = () => {
+      const v = pullRef.current
+      sy = null
+      if (!v) return
+      reset()
+      if (v >= THRESH && !busyRef.current) {
+        busyRef.current = true; setRefreshing(true)
+        timer = setTimeout(() => { // simulasi lokal: tidak ada request ke server
+          setFiles(fs => [...fs]); busyRef.current = false; setRefreshing(false)
+          setToast('Daftar file diperbarui. Data masih lokal (simulasi), tidak ada permintaan ke server.')
+        }, 1000)
+      }
+    }
+    addEventListener('touchstart', ts, { passive: true })
+    addEventListener('touchmove', tm, { passive: false })
+    addEventListener('touchend', te, { passive: true })
+    addEventListener('touchcancel', te, { passive: true })
+    return () => { removeEventListener('touchstart', ts); removeEventListener('touchmove', tm); removeEventListener('touchend', te); removeEventListener('touchcancel', te); clearTimeout(timer) }
+  }, [])
+
   const list = useMemo(() => {
     let l = files.filter(f => nav === 'trash' ? f.trash : !f.trash)
     if (nav === 'star') l = l.filter(f => f.star)
@@ -133,6 +196,11 @@ export default function App() {
   const selFile = files.find(f => f.id === sel)
   const patch = (id, p) => setFiles(fs => fs.map(f => f.id === id ? { ...f, ...p } : f))
   const upd = (id, p) => setUps(us => us.map(u => u.id === id ? { ...u, ...p } : u))
+  const starBtn = (f, cls = '') => (
+    <button aria-pressed={f.star} aria-label={`${f.star ? 'Hapus bintang dari' : 'Beri bintang'} ${f.name}`} onClick={() => patch(f.id, { star: !f.star })} className={`${B} min-w-11 justify-center px-0! hover:bg-sel ${cls}`}>
+      <Icon n="star" fill={f.star} className="text-accent" />
+    </button>)
+  const iconBox = f => `grid shrink-0 place-items-center ${f.type === 'Folder' ? 'bg-sel text-accent' : 'bg-side text-sub'}`
 
   const addFiles = fl => {
     const n = [...fl].map(f => {
@@ -157,8 +225,8 @@ export default function App() {
   const setShare = v => v === 'public' ? setConfirmPublic(true) : (patch(sel, { share: 'private' }), setToast('Akses diubah: hanya Anda yang bisa membuka file ini.'))
 
   const NavBtns = ({ cls }) => NAV.map(([k, l, i]) => (
-    <button key={k} onClick={() => { setNav(k); setMenu(null) }} aria-current={nav === k ? 'page' : undefined}
-      className={`${B} whitespace-nowrap ${cls} ${nav === k ? 'bg-sel text-ink font-bold shadow-[inset_4px_0_0_#D985AA]' : 'text-ink hover:bg-sel/60'}`}>
+    <button key={k} onClick={() => { setNav(k); setMenu(null); setDrawer(false) }} aria-current={nav === k ? 'page' : undefined}
+      className={`${B} whitespace-nowrap ${cls} ${nav === k ? 'bg-sel text-ink font-bold shadow-[inset_4px_0_0_var(--c-brand-hover)]' : 'text-ink hover:bg-sel/60'}`}>
       <Icon n={i} className={nav === k ? 'text-accent' : ''} />{l}
     </button>))
   const titles = { home: 'Beranda', files: 'File Saya', recent: 'Terbaru', star: 'Berbintang', trash: 'Sampah' }
@@ -166,9 +234,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen md:flex">
-      <a href="#utama" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-white focus:p-3">Lewati ke konten utama</a>
-      <aside className="hidden w-64 shrink-0 flex-col gap-2 border-r border-line bg-white p-4 md:flex">
-        <h1 className="mb-2 flex items-center gap-2 text-2xl font-extrabold text-ink"><span className="grid h-9 w-9 place-items-center rounded-xl bg-brand"><Icon n="cloud" size={22} /></span>DriveEase</h1>
+      <a href="#utama" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-card focus:p-3">Lewati ke konten utama</a>
+      <aside className="hidden w-56 shrink-0 flex-col gap-2 border-r border-line bg-side p-4 md:sticky md:top-0 md:flex md:h-screen md:self-start md:overflow-y-auto lg:w-64">
+        <h1 className="mb-2 flex items-center gap-2 text-2xl font-extrabold text-ink"><span className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-onbrand"><Icon n="cloud" size={22} /></span>DriveEase</h1>
         <button onClick={() => setMenu(menu === 'new' ? null : 'new')} aria-expanded={menu === 'new'} className={PRIMARY + ' text-lg'}><Icon n="plus" />Baru</button>
         {menu === 'new' && <NewMenu />}
         <nav aria-label="Menu utama" className="mt-2 flex flex-col gap-1"><NavBtns cls="w-full" /></nav>
@@ -176,64 +244,110 @@ export default function App() {
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="flex flex-wrap items-center gap-3 border-b border-line bg-white p-3">
-          <h1 className="flex items-center gap-2 text-xl font-extrabold text-ink md:hidden"><Icon n="cloud" size={22} className="text-accent" />DriveEase</h1>
+        <header className="flex flex-wrap items-center gap-3 border-b border-line bg-card p-3">
+          <button onClick={() => setDrawer(true)} aria-label="Buka menu navigasi" aria-expanded={drawer} className={SECOND + ' px-3! md:hidden'}><Icon n="menu" /></button>
+          <h1 className="flex items-center gap-2 text-xl font-extrabold text-ink md:hidden"><Icon n="cloud" size={22} className="text-accent" /><span className="max-[400px]:sr-only">DriveEase</span></h1>
           <div className="relative order-last w-full md:order-none md:w-auto md:flex-1 md:max-w-xl">
             <Icon n="search" className="pointer-events-none absolute left-3 top-3 text-sub" />
             <label htmlFor="cari" className="sr-only">Cari file berdasarkan nama</label>
             <input id="cari" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Cari file berdasarkan nama"
-              className="min-h-11 w-full rounded-xl border border-edge bg-white pl-10 pr-3 placeholder:text-sub" />
+              className="min-h-11 w-full rounded-xl border border-edge bg-card pl-10 pr-3 placeholder:text-sub" />
           </div>
           <button onClick={() => setMenu(menu === 'new' ? null : 'new')} aria-expanded={menu === 'new'} className={PRIMARY + ' md:hidden ml-auto'}><Icon n="plus" />Baru</button>
           <div className="relative md:ml-auto">
-            <button onClick={() => setMenu(menu === 'profile' ? null : 'profile')} aria-expanded={menu === 'profile'} aria-label="Menu profil dan pengaturan" className={SECOND}><Icon n="user" />Profil</button>
+            <button onClick={() => setMenu(menu === 'profile' ? null : 'profile')} aria-expanded={menu === 'profile'} aria-label="Menu profil dan pengaturan" className={SECOND + ' max-sm:px-3!'}><Icon n="user" /><span className="max-sm:sr-only">Profil</span></button>
             {menu === 'profile' && (
-              <div className="absolute right-0 z-30 mt-2 w-72 rounded-xl border border-line bg-white p-4 shadow-lg">
+              <div className="absolute right-0 z-30 mt-2 max-h-[75vh] w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-line bg-card p-4 shadow-lg">
                 <p className="font-bold">Pengguna Contoh</p>
                 <p className="text-sm text-sub">pengguna@contoh.id (data fiktif)</p>
                 <p className="mt-3 flex items-center gap-2 font-semibold"><Icon n="sliders" />Pengaturan</p>
                 <label className="mt-1 flex min-h-11 items-center gap-3"><input type="checkbox" className="h-6 w-6" checked={big} onChange={e => setBig(e.target.checked)} />Perbesar ukuran teks</label>
+                <fieldset className="mt-3">
+                  <legend className="flex items-center gap-2 font-semibold"><Icon n="sun" />Tema tampilan</legend>
+                  {[['pink', 'Baby Pink', 'sun'], ['dark', 'Mode Gelap', 'moon']].map(([v, l, i]) => (
+                    <label key={v} className={`mt-1 flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 ${theme === v ? 'border-edge bg-sel font-semibold' : 'border-line hover:bg-side'}`}>
+                      <input type="radio" name="tema" className="h-5 w-5" checked={theme === v} onChange={() => setTheme(v)} /><Icon n={i} />{l}
+                    </label>))}
+                </fieldset>
               </div>)}
           </div>
           {menu === 'new' && <div className="w-full md:hidden"><NewMenu /></div>}
         </header>
-        <nav aria-label="Menu utama (ponsel)" className="flex gap-1 overflow-x-auto border-b border-line bg-side p-2 md:hidden"><NavBtns cls="" /></nav>
 
-        <main id="utama" className="p-4">
+        <main id="utama" className="p-3 md:p-4 lg:p-6">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-2xl font-bold">{titles[nav]}</h2>
-            <button onClick={() => setGrid(!grid)} className={SECOND}><Icon n={grid ? 'list' : 'grid'} />Tampilan: {grid ? 'Kotak (ganti ke Daftar)' : 'Daftar (ganti ke Kotak)'}</button>
+            <div role="group" aria-label="Pilih tampilan file" className="inline-flex gap-1 rounded-xl border border-edge bg-card p-1">
+              {[[false, 'Daftar', 'list'], [true, 'Kotak', 'grid']].map(([v, l, i]) => (
+                <button key={l} aria-pressed={grid === v} onClick={() => setGrid(v)} className={`${B} justify-center ${grid === v ? 'bg-sel font-bold shadow-[inset_0_-3px_0_var(--c-accent)]' : 'hover:bg-side'}`}><Icon n={i} />{l}</button>))}
+            </div>
           </div>
           {nav === 'home' && <p className="mb-3 text-sub">Selamat datang! Tekan <strong>+ Baru</strong> untuk mengunggah file atau membuat folder. Berikut file yang baru Anda ubah.</p>}
           {nav === 'trash' && <p className="mb-3 text-sub">File di Sampah masih bisa dikembalikan.</p>}
           {list.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-edge bg-white p-8 text-center">
+            <div className="rounded-xl border-2 border-dashed border-edge bg-card p-8 text-center">
               <p className="font-semibold">{q ? `Tidak ada file dengan nama "${q}".` : 'Belum ada file di sini.'}</p>
               <p className="text-sub">{q ? 'Periksa ejaan atau hapus kata pencarian.' : 'Tekan "+ Baru" untuk mulai.'}</p>
             </div>
           ) : (
-            <ul className={grid ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2'}>
-              {!grid && <li aria-hidden="true" className="hidden grid-cols-[1fr_7rem_6rem_8rem] gap-3 px-3 text-sm font-semibold text-sub sm:grid"><span>Nama</span><span>Tipe</span><span>Ukuran</span><span>Diubah</span></li>}
+            grid ? (
+            <ul className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
               {list.map(f => (
-                <li key={f.id} className={`flex items-center gap-2 rounded-xl border border-line bg-white p-2 ${grid ? 'flex-wrap' : ''}`}>
-                  <button aria-pressed={f.star} aria-label={`${f.star ? 'Hapus bintang dari' : 'Beri bintang'} ${f.name}`} onClick={() => patch(f.id, { star: !f.star })} className={SECOND + ' !px-3'}><Icon n="star" fill={f.star} className="text-accent" /></button>
-                  <button onClick={() => setSel(f.id)} aria-label={`Lihat detail ${f.name}`} className={`min-h-11 flex-1 rounded-xl px-2 text-left font-semibold hover:bg-side ${grid ? '' : 'sm:grid sm:grid-cols-[1fr_7rem_6rem_8rem] sm:items-center sm:gap-3'}`}>
-                    <span className="flex items-center gap-2 break-words"><Icon n={f.type === 'Folder' ? 'folder' : 'file'} className="text-accent" /><span>{f.name}</span></span>
-                    <span className="block text-sm font-normal text-sub sm:text-base">{f.type}{grid || ' '}</span>
-                    {!grid && <span className="hidden text-sub sm:block">{fmt(f.size)}</span>}
-                    {!grid && <span className="hidden text-sub sm:block">{f.mod}</span>}
-                    {grid && <span className="block text-sm font-normal text-sub">{fmt(f.size)} · {f.mod}</span>}
-                    {!grid && <span className="block text-sm font-normal text-sub sm:hidden">{fmt(f.size)} · {f.mod}</span>}
+                <li key={f.id} className="relative rounded-2xl border border-line bg-card">
+                  {starBtn(f, 'absolute right-1 top-1')}
+                  <button onClick={() => setSel(f.id)} aria-label={`Lihat detail ${f.name}`} title={f.name} className="flex min-h-36 w-full min-w-0 flex-col items-center gap-2 rounded-2xl p-3 pt-9 text-center hover:bg-side">
+                    <span className={`${iconBox(f)} h-16 w-16 rounded-2xl`}><Icon n={f.type === 'Folder' ? 'folder' : 'file'} size={32} /></span>
+                    <span className="line-clamp-2 w-full break-words font-semibold">{f.name}</span>
+                    <span className="w-full truncate text-sm text-sub">{f.type === 'Folder' ? 'Folder' : `${f.type} · ${fmt(f.size)}`}</span>
                   </button>
                 </li>))}
-            </ul>)}
+            </ul>
+          ) : (
+            <ul className="overflow-hidden rounded-xl border border-line bg-card">
+              <li aria-hidden="true" className="hidden grid-cols-[1fr_7rem_6rem_8rem] gap-3 border-b border-line py-2 pl-[4.25rem] pr-4 text-sm font-semibold text-sub sm:grid"><span>Nama</span><span>Tipe</span><span>Ukuran</span><span>Diubah</span></li>
+              {list.map(f => (
+                <li key={f.id} className="flex items-center gap-1 border-b border-line px-2 py-1 last:border-b-0">
+                  {starBtn(f)}
+                  <button onClick={() => setSel(f.id)} aria-label={`Lihat detail ${f.name}`} title={f.name} className="min-h-11 min-w-0 flex-1 rounded-xl px-2 py-1 text-left hover:bg-side sm:grid sm:grid-cols-[1fr_7rem_6rem_8rem] sm:items-center sm:gap-3">
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className={`${iconBox(f)} h-9 w-9 rounded-lg`}><Icon n={f.type === 'Folder' ? 'folder' : 'file'} /></span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">{f.name}</span>
+                        <span className="block truncate text-sm text-sub sm:hidden">{f.type}{f.size != null && ` · ${fmt(f.size)}`} · {f.mod}</span>
+                      </span>
+                    </span>
+                    <span className="hidden text-sub sm:block">{f.type}</span>
+                    <span className="hidden text-sub sm:block">{fmt(f.size)}</span>
+                    <span className="hidden text-sub sm:block">{f.mod}</span>
+                  </button>
+                </li>))}
+            </ul>))}
         </main>
-        <div className="p-4 md:hidden"><Storage /></div>
       </div>
 
-      {pending && !dlg && <button onClick={() => setDlg('upload')} className={PRIMARY + ' fixed bottom-4 left-4 z-30 shadow-lg'}>Upload sedang berjalan – buka status</button>}
-      <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 max-w-sm">
-        {toast && <div className="flex items-start gap-3 rounded-xl bg-ink p-3 text-white shadow-lg"><Icon n="bell" className="mt-2" /><p className="flex-1 pt-1.5">{toast}</p><button onClick={() => setToast('')} className={B + 'border border-white hover:bg-white/10'}>Tutup notifikasi</button></div>}
+      <div role="status" aria-live="polite" className="sr-only">{refreshing ? 'Memperbarui daftar file' : ''}</div>
+      {(pull > 0 || refreshing) && (
+        <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-30 flex justify-center md:hidden">
+          <div style={{ transform: `translateY(${refreshing ? 8 : pull - 48}px)`, opacity: refreshing ? 1 : Math.min(1, pull / 40), transition: pulling ? 'none' : 'transform .2s, opacity .2s' }} className="flex items-center gap-2 rounded-full border border-edge bg-card px-4 py-2 text-sm font-semibold text-ink shadow-lg">
+            <Icon n="refresh" className={`text-accent ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Memperbarui daftar…' : pull >= 64 ? 'Lepaskan untuk memperbarui' : 'Tarik ke bawah untuk memperbarui'}
+          </div>
+        </div>)}
+      {drawer && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setDrawer(false)} aria-hidden="true" />
+          <div role="dialog" aria-modal="true" aria-label="Menu navigasi" className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col gap-2 overflow-y-auto bg-side p-4 shadow-xl">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-xl font-extrabold text-ink"><span className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-onbrand"><Icon n="cloud" size={22} /></span>DriveEase</span>
+              <button autoFocus onClick={() => setDrawer(false)} aria-label="Tutup menu navigasi" className={SECOND + ' px-3!'}><Icon n="x" /></button>
+            </div>
+            <nav aria-label="Menu utama" className="flex flex-col gap-1"><NavBtns cls="w-full" /></nav>
+            <Storage />
+          </div>
+        </div>)}
+      {pending && !dlg && <button onClick={() => setDlg('upload')} className={PRIMARY + ' fixed bottom-24 left-4 z-30 shadow-lg sm:bottom-4'}>Upload sedang berjalan – buka status</button>}
+      <div role="status" aria-live="polite" className="fixed bottom-4 left-4 right-4 z-50 sm:left-auto sm:max-w-sm">
+        {toast && <div className="flex items-start gap-3 rounded-xl border border-edge bg-card p-3 text-ink shadow-lg"><Icon n="bell" className="mt-2" /><p className="flex-1 pt-1.5">{toast}</p><button onClick={() => setToast('')} className={B + 'border border-edge hover:bg-sel'}>Tutup notifikasi</button></div>}
       </div>
 
       {dlg === 'folder' && (
@@ -241,7 +355,7 @@ export default function App() {
           <form onSubmit={createFolder} className="flex flex-col gap-3" noValidate>
             <label htmlFor="nf" className="font-semibold">Nama folder</label>
             <input id="nf" autoFocus value={fname} onChange={e => { setFname(e.target.value); setFerr('') }} aria-invalid={!!ferr} aria-describedby={ferr ? 'nf-err' : undefined} className="min-h-11 rounded-xl border border-edge px-3" />
-            {ferr && <p id="nf-err" role="alert" className="font-semibold text-red-800"><Icon n="alert" size={18} className="mr-1 inline" />{ferr}</p>}
+            {ferr && <p id="nf-err" role="alert" className="font-semibold text-bad"><Icon n="alert" size={18} className="mr-1 inline" />{ferr}</p>}
             <button type="submit" className={PRIMARY}>Buat folder</button>
           </form>
         </Modal>)}
@@ -267,7 +381,7 @@ export default function App() {
                 <p className="break-words font-semibold">{u.name} <span className="font-normal text-sub">({fmt(u.size)})</span></p>
                 <p className={`font-bold ${color}`}><Icon n={icon} size={18} className="mr-1 inline" />Status: {label}{u.status === 'uploading' && ` – ${u.progress}%`}{u.status === 'uploading' && u.mode === 'slow' && ' (koneksi lambat, mohon tunggu)'}</p>
                 {(u.status === 'uploading' || u.status === 'success') && <div role="progressbar" aria-label={`Progres upload ${u.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={u.progress} className="my-2 h-4 overflow-hidden rounded bg-line"><div style={{ width: u.progress + '%' }} className="h-full bg-brand-hover transition-all" /></div>}
-                {u.status === 'failed' && <p role="alert" className="font-semibold text-red-800">Penyebab: {u.reason}</p>}
+                {u.status === 'failed' && <p role="alert" className="font-semibold text-bad">Penyebab: {u.reason}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {u.status === 'uploading' && <button onClick={() => upd(u.id, { status: 'cancelled' })} className={SECOND}>Batalkan upload</button>}
                   {u.status === 'ready' && <button onClick={() => upd(u.id, { status: 'cancelled' })} className={SECOND}>Hapus dari daftar</button>}
@@ -315,14 +429,14 @@ export default function App() {
 
   function NewMenu() {
     return (
-      <div className="z-20 flex flex-col gap-1 rounded-xl border border-line bg-white p-2 shadow-lg" role="group" aria-label="Menu Baru">
+      <div className="z-20 flex flex-col gap-1 rounded-xl border border-line bg-card p-2 shadow-lg" role="group" aria-label="Menu Baru">
         <button className={SECOND} onClick={() => { setMenu(null); setFerr(''); setDlg('folder') }}><Icon n="folder" />Folder baru</button>
         <button className={SECOND} onClick={() => { setMenu(null); setNav('files'); setDlg('upload') }}><Icon n="upload" />Upload file</button>
       </div>)
   }
   function Storage() {
     return (
-      <div className="mt-auto rounded-xl bg-white border border-line p-3">
+      <div className="mt-auto rounded-xl bg-card border border-line p-3">
         <p className="font-semibold">Penyimpanan</p>
         <div role="progressbar" aria-label="Penyimpanan terpakai" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} className="my-2 h-3 overflow-hidden rounded bg-line"><div style={{ width: pct + '%' }} className="h-full bg-brand-hover" /></div>
         <p className="text-sm">{fmt(used)} dari 15 GB terpakai ({pct}%)</p>
