@@ -2,7 +2,5 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-export default defineConfig({ 
-    base: '/driveease/',
-    plugins: [react(), tailwindcss()],
-})
+// base './' supaya bisa dibuka dari GitHub Pages (alamat repo apa pun)
+export default defineConfig({ base: './', plugins: [react(), tailwindcss()] })
