@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #E8A0BF;
+  --color-brand-hover: #D985AA;
+  --color-bg: #FFF8FB;
+  --color-side: #FFF0F5;
+  --color-line: #F0D5E0;
+  --color-sel: #FADCE8;
+  --color-ink: #49313D;
+  --color-sub: #795D6C;
+  --color-edge: #A57C95;   /* border input/tombol: kontras >= 3:1 */
+  --color-accent: #B8527F; /* ikon & aksen teks yang butuh kontras lebih */
+}
+
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--color-ink); background: var(--color-bg); }
+/* Indikator fokus keyboard yang selalu terlihat */
+:focus-visible { outline: 3px solid var(--color-ink); outline-offset: 2px; box-shadow: 0 0 0 5px #fff; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--color-accent); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
