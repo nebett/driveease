@@ -12,20 +12,32 @@ const seed = [
   { id: 7, name: 'Draf Lama.docx', type: 'Dokumen', size: 0.3 * MB, mod: '1 Sep 2026', ts: 2, star: false, trash: true, share: 'private' },
 ]
 const NAV = [['home', 'Beranda', 'home'], ['files', 'File Saya', 'folder'], ['recent', 'Terbaru', 'clock'], ['star', 'Berbintang', 'star'], ['trash', 'Sampah', 'trash']]
-const TOTAL = 15 * 1024 * MB, BASE_USED = 2.1 * 1024 * MB, LIMIT = 50 * MB
+const TOTAL = 1024 * MB, LIMIT = 50 * MB // penyimpanan SIMULASI 1 GB
+// Hanya untuk pengembang (npm run dev): buka /?storage=69, 85, 97, atau 100 untuk menguji tiap kondisi. Diabaikan di build produksi.
+const DEV_P = import.meta.env.DEV ? new URLSearchParams(location.search).get('storage') : null
+const DEV_PCT = DEV_P !== null && DEV_P !== '' ? Number(DEV_P) : NaN
+const SEED_USED = seed.filter(f => !f.trash).reduce((a, f) => a + (f.size || 0), 0)
+const BASE_USED = DEV_PCT >= 0 && DEV_PCT <= 100 ? Math.max(0, DEV_PCT / 100 * TOTAL - SEED_USED) : 700 * MB
+const LEVELS = {
+  warn: { icon: 'alert', border: 'border-warn', text: 'text-warn', bar: 'bg-warn', label: 'Hampir penuh', title: 'Penyimpanan hampir penuh', detail: 'Lihat penggunaan', desc: 'Sebagian besar kapasitas penyimpanan simulasi sudah digunakan. Periksa file yang tidak lagi diperlukan.' },
+  critical: { icon: 'alert', border: 'border-bad', text: 'text-bad', bar: 'bg-bad', label: 'Hampir habis', title: 'Penyimpanan hampir habis', detail: 'Lihat rincian', desc: 'Kapasitas yang tersisa sangat sedikit. Pengunggahan file berikutnya mungkin tidak dapat dilakukan jika ukurannya melebihi ruang yang tersedia.' },
+  full: { icon: 'xcircle', border: 'border-bad', text: 'text-bad', bar: 'bg-bad', label: 'Penuh', title: 'Penyimpanan penuh', detail: 'Lihat rincian', desc: 'Tidak ada ruang tersisa, sehingga file baru ditolak saat diunggah dan tidak ditambahkan ke daftar. Kosongkan ruang dengan mengelola file yang ada.' },
+}
 
-const fmt = b => b == null ? '—' : b < 1024 ? b + ' B' : b < MB ? (b / 1024).toFixed(1) + ' KB' : b < 1024 * MB ? (b / MB).toFixed(1) + ' MB' : (b / MB / 1024).toFixed(1) + ' GB'
+const num = v => v.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const fmt = b => b == null ? '—' : b < 1024 ? b + ' B' : b < MB ? num(b / 1024) + ' KB' : b < 1024 * MB ? num(b / MB) + ' MB' : num(b / MB / 1024) + ' GB'
 const typeOf = n => {
   const e = (n.split('.').pop() || '').toLowerCase()
   return { pdf: 'PDF', png: 'Gambar', jpg: 'Gambar', jpeg: 'Gambar', docx: 'Dokumen', doc: 'Dokumen', xlsx: 'Spreadsheet', csv: 'Spreadsheet' }[e] || (e ? e.toUpperCase() : 'File')
 }
 const STATUS = {
-  ready: ['Siap diunggah', 'clock', 'text-sub'], uploading: ['Sedang mengunggah', 'upload', 'text-ink'],
-  success: ['Upload berhasil', 'check', 'text-ok'], failed: ['Upload gagal', 'xcircle', 'text-bad'], cancelled: ['Dibatalkan', 'ban', 'text-sub'],
+  ready: ['File dipilih (siap diunggah)', 'clock', 'text-sub'], uploading: ['Sedang mengunggah file...', 'upload', 'text-ink'],
+  success: ['Simulasi pengunggahan berhasil', 'check', 'text-ok'], failed: ['Pengunggahan gagal', 'xcircle', 'text-bad'], cancelled: ['Pengunggahan dibatalkan', 'ban', 'text-sub'],
 }
 const B = 'min-h-11 px-4 rounded-xl font-semibold inline-flex items-center gap-2 transition-colors '
 const PRIMARY = B + 'justify-center bg-brand text-onbrand shadow-sm hover:bg-brand-hover'
 const SECOND = B + 'justify-center border border-edge bg-card text-ink hover:bg-sel'
+const DANGER = B + 'justify-center bg-bad text-card hover:opacity-90'
 
 // Ikon SVG outline bergaya sama (24x24, garis 1.75) – tanpa library tambahan
 const P = {
@@ -94,8 +106,12 @@ export default function App() {
   const [toast, setToast] = useState('')
   const [confirmPublic, setConfirmPublic] = useState(false)
   const [big, setBig] = useState(false)
-  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('driveease-theme') === 'dark' ? 'dark' : 'pink' } catch { return 'pink' } })
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('driveease-theme') === 'dark' ? 'dark' : 'light' } catch { return 'light' } })
   const [drawer, setDrawer] = useState(false)
+  const [warnOff, setWarnOff] = useState('')
+  const [del, setDel] = useState(null)
+  const [live, setLive] = useState('')
+  const prevSt = useRef({})
   const [fname, setFname] = useState('')
   const [ferr, setFerr] = useState('')
   const [drag, setDrag] = useState(false)
@@ -118,7 +134,7 @@ export default function App() {
     const t = setInterval(() => setUps(us => us.map(u => {
       if (u.status !== 'uploading') return u
       const p = Math.min(100, u.progress + (u.mode === 'slow' ? 4 : 12))
-      if (u.mode === 'fail' && p >= 60) return { ...u, progress: 60, status: 'failed', reason: 'Koneksi internet terputus pada 60% (simulasi). Periksa sambungan Anda, lalu tekan "Coba lagi".' }
+      if (u.mode === 'fail' && p >= 60) return { ...u, progress: 60, status: 'failed', reason: 'Pengunggahan terhenti pada 60% (kegagalan simulasi). Penyebabnya bisa berupa koneksi terputus; periksa sambungan Anda, lalu tekan "Coba lagi".' }
       return p >= 100 ? { ...u, progress: 100, status: 'success' } : { ...u, progress: p }
     })), 400)
     return () => clearInterval(t)
@@ -132,7 +148,7 @@ export default function App() {
         const fid = nextId.current++
         setFiles(fs => [{ id: fid, name: u.name, type: typeOf(u.name), size: u.size, mod: 'Baru saja', ts: Date.now(), star: false, trash: false, share: 'private' }, ...fs])
         setUps(us => us.map(x => x.id === u.id ? { ...x, fileId: fid } : x))
-        setToast(`Upload berhasil: ${u.name}`)
+        setToast(`Simulasi pengunggahan berhasil: ${u.name}`)
       }
     })
   }, [ups])
@@ -192,7 +208,9 @@ export default function App() {
   }, [files, nav, q])
 
   const used = BASE_USED + files.filter(f => !f.trash).reduce((s, f) => s + (f.size || 0), 0)
-  const pct = Math.round(used / TOTAL * 100)
+  const pct = Math.min(100, Math.floor(used / TOTAL * 100))
+  const left = Math.max(0, TOTAL - used)
+  const level = left <= 0 ? 'full' : pct >= 95 ? 'critical' : pct >= 80 ? 'warn' : 'normal'
   const selFile = files.find(f => f.id === sel)
   const patch = (id, p) => setFiles(fs => fs.map(f => f.id === id ? { ...f, ...p } : f))
   const upd = (id, p) => setUps(us => us.map(u => u.id === id ? { ...u, ...p } : u))
@@ -200,7 +218,17 @@ export default function App() {
     <button aria-pressed={f.star} aria-label={`${f.star ? 'Hapus bintang dari' : 'Beri bintang'} ${f.name}`} onClick={() => patch(f.id, { star: !f.star })} className={`${B} min-w-11 justify-center px-0! hover:bg-sel ${cls}`}>
       <Icon n="star" fill={f.star} className="text-accent" />
     </button>)
-  const iconBox = f => `grid shrink-0 place-items-center ${f.type === 'Folder' ? 'bg-sel text-accent' : 'bg-side text-sub'}`
+  useEffect(() => { if (level === 'normal') setWarnOff('') }, [level])
+  // Pengumuman status untuk pembaca layar: hanya saat status berubah (bukan tiap progres)
+  useEffect(() => {
+    ups.forEach(u => {
+      if (prevSt.current[u.id] === u.status) return
+      prevSt.current[u.id] = u.status
+      const m = { uploading: 'Sedang mengunggah file', failed: 'Pengunggahan gagal', cancelled: 'Pengunggahan dibatalkan' }[u.status]
+      if (m) setLive(`${m}: ${u.name}`)
+    })
+  }, [ups])
+  const iconBox = f => `grid shrink-0 place-items-center ${f.type === 'Folder' ? 'bg-sel text-accent' : 'bg-bg text-sub'}`
 
   const addFiles = fl => {
     const n = [...fl].map(f => {
@@ -211,9 +239,26 @@ export default function App() {
     setUps(u => [...n, ...u])
     setToast(`${n.length} file dipilih. Tekan "Mulai upload" untuk melanjutkan.`)
   }
-  const start = () => setUps(us => us.map(u => u.status === 'ready' ? { ...u, status: 'uploading', mode } : u))
-  const retry = id => upd(id, { status: 'uploading', progress: 0, mode: 'normal', reason: '' })
-  const view = u => { setDlg(null); setNav('files'); setQ(''); setSel(u.fileId) }
+  const quotaMsg = (size, avail) => `Ukuran file (${fmt(size)}) melebihi sisa penyimpanan simulasi (${fmt(Math.max(0, avail))}). File tidak diunggah dan tidak ditambahkan ke daftar. Gunakan "Kelola file" untuk mengosongkan ruang, lalu tekan "Coba lagi".`
+  const room = () => TOTAL - used - ups.filter(u => u.status === 'uploading').reduce((a, u) => a + u.size, 0)
+  const start = () => {
+    let avail = room()
+    setUps(ups.map(u => {
+      if (u.status !== 'ready') return u
+      if (u.size > avail) return { ...u, status: 'failed', quota: true, reason: quotaMsg(u.size, avail) }
+      avail -= u.size
+      return { ...u, status: 'uploading', quota: false, mode, t0: Date.now() }
+    }))
+  }
+  const retry = id => {
+    const u = ups.find(x => x.id === id), avail = room()
+    if (u.size > avail) { upd(id, { quota: true, reason: quotaMsg(u.size, avail) }); return setToast('Ruang penyimpanan simulasi masih belum cukup.') }
+    upd(id, { status: 'uploading', progress: 0, mode: 'normal', reason: '', quota: false, t0: Date.now() })
+  }
+  const removeFile = f => { setFiles(fs => fs.filter(x => x.id !== f.id)); setDel(null); setToast(`"${f.name}" dihapus permanen dari data simulasi. Ruang bertambah ${fmt(f.size)}.`) }
+  const trashFile = f => { patch(f.id, { trash: true }); setToast(`"${f.name}" dipindahkan ke Sampah (bisa dikembalikan). Ruang bertambah ${fmt(f.size)}.`) }
+  const sized = files.filter(f => !f.trash && f.size != null).sort((a, b) => b.size - a.size)
+  const view = u => { if (!files.some(f => f.id === u.fileId)) return setToast('File ini sudah tidak ada di daftar.'); setDlg(null); setNav('files'); setQ(''); setSel(u.fileId) }
   const createFolder = e => {
     e.preventDefault()
     const n = fname.trim()
@@ -244,16 +289,21 @@ export default function App() {
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="flex flex-wrap items-center gap-3 border-b border-line bg-card p-3">
+        <header className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b md:gap-3 border-line bg-card p-3">
           <button onClick={() => setDrawer(true)} aria-label="Buka menu navigasi" aria-expanded={drawer} className={SECOND + ' px-3! md:hidden'}><Icon n="menu" /></button>
-          <h1 className="flex items-center gap-2 text-xl font-extrabold text-ink md:hidden"><Icon n="cloud" size={22} className="text-accent" /><span className="max-[400px]:sr-only">DriveEase</span></h1>
-          <div className="relative order-last w-full md:order-none md:w-auto md:flex-1 md:max-w-xl">
+          <h1 className="flex items-center gap-2 min-w-0 flex-1 text-xl font-extrabold text-ink md:hidden"><Icon n="cloud" size={22} className="text-accent" /><span className="max-[400px]:sr-only">DriveEase</span></h1>
+          <div className="order-last flex w-full items-center gap-2 md:contents">
+          <div className="relative min-w-0 flex-1 md:order-first md:max-w-xl">
             <Icon n="search" className="pointer-events-none absolute left-3 top-3 text-sub" />
             <label htmlFor="cari" className="sr-only">Cari file berdasarkan nama</label>
             <input id="cari" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Cari file berdasarkan nama"
               className="min-h-11 w-full rounded-xl border border-edge bg-card pl-10 pr-3 placeholder:text-sub" />
           </div>
-          <button onClick={() => setMenu(menu === 'new' ? null : 'new')} aria-expanded={menu === 'new'} className={PRIMARY + ' md:hidden ml-auto'}><Icon n="plus" />Baru</button>
+          <div className="relative shrink-0 md:hidden">
+            <button onClick={() => setMenu(menu === 'new' ? null : 'new')} aria-expanded={menu === 'new'} className={PRIMARY}><Icon n="plus" />Baru</button>
+            {menu === 'new' && <div className="absolute right-0 top-full z-30 mt-2 w-56 max-w-[calc(100vw-1.5rem)]"><NewMenu /></div>}
+          </div>
+          </div>
           <div className="relative md:ml-auto">
             <button onClick={() => setMenu(menu === 'profile' ? null : 'profile')} aria-expanded={menu === 'profile'} aria-label="Menu profil dan pengaturan" className={SECOND + ' max-sm:px-3!'}><Icon n="user" /><span className="max-sm:sr-only">Profil</span></button>
             {menu === 'profile' && (
@@ -264,22 +314,37 @@ export default function App() {
                 <label className="mt-1 flex min-h-11 items-center gap-3"><input type="checkbox" className="h-6 w-6" checked={big} onChange={e => setBig(e.target.checked)} />Perbesar ukuran teks</label>
                 <fieldset className="mt-3">
                   <legend className="flex items-center gap-2 font-semibold"><Icon n="sun" />Tema tampilan</legend>
-                  {[['pink', 'Baby Pink', 'sun'], ['dark', 'Mode Gelap', 'moon']].map(([v, l, i]) => (
-                    <label key={v} className={`mt-1 flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 ${theme === v ? 'border-edge bg-sel font-semibold' : 'border-line hover:bg-side'}`}>
+                  {[['light', 'Mode Terang', 'sun'], ['dark', 'Mode Gelap', 'moon']].map(([v, l, i]) => (
+                    <label key={v} className={`mt-1 flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 ${theme === v ? 'border-edge bg-sel font-semibold' : 'border-line hover:bg-sel'}`}>
                       <input type="radio" name="tema" className="h-5 w-5" checked={theme === v} onChange={() => setTheme(v)} /><Icon n={i} />{l}
                     </label>))}
                 </fieldset>
               </div>)}
           </div>
-          {menu === 'new' && <div className="w-full md:hidden"><NewMenu /></div>}
         </header>
 
         <main id="utama" className="p-3 md:p-4 lg:p-6">
+          {level !== 'normal' && warnOff !== level && (
+            <div role="status" className={`mb-3 rounded-xl border-2 bg-card p-3 ${LEVELS[level].border}`}>
+              <div className="flex items-start gap-3">
+                <Icon n={LEVELS[level].icon} className={`mt-0.5 ${LEVELS[level].text}`} />
+                <div className="min-w-0 flex-1">
+                  <p className={`font-bold ${LEVELS[level].text}`}>{LEVELS[level].title} ({pct}%)</p>
+                  <p>{LEVELS[level].desc}</p>
+                  <p className="text-sm text-sub">Ini penyimpanan simulasi untuk demonstrasi. Tidak ada file yang dihapus otomatis.</p>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={() => setDlg('manage')} className={PRIMARY}>Kelola file</button>
+                <button onClick={() => setDlg('storage')} className={SECOND}>{LEVELS[level].detail}</button>
+                <button onClick={() => setWarnOff(level)} className={SECOND}>Tutup</button>
+              </div>
+            </div>)}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-2xl font-bold">{titles[nav]}</h2>
             <div role="group" aria-label="Pilih tampilan file" className="inline-flex gap-1 rounded-xl border border-edge bg-card p-1">
               {[[false, 'Daftar', 'list'], [true, 'Kotak', 'grid']].map(([v, l, i]) => (
-                <button key={l} aria-pressed={grid === v} onClick={() => setGrid(v)} className={`${B} justify-center ${grid === v ? 'bg-sel font-bold shadow-[inset_0_-3px_0_var(--c-accent)]' : 'hover:bg-side'}`}><Icon n={i} />{l}</button>))}
+                <button key={l} aria-pressed={grid === v} onClick={() => setGrid(v)} className={`${B} justify-center ${grid === v ? 'bg-sel font-bold shadow-[inset_0_-3px_0_var(--c-accent)]' : 'hover:bg-sel'}`}><Icon n={i} />{l}</button>))}
             </div>
           </div>
           {nav === 'home' && <p className="mb-3 text-sub">Selamat datang! Tekan <strong>+ Baru</strong> untuk mengunggah file atau membuat folder. Berikut file yang baru Anda ubah.</p>}
@@ -295,7 +360,7 @@ export default function App() {
               {list.map(f => (
                 <li key={f.id} className="relative rounded-2xl border border-line bg-card">
                   {starBtn(f, 'absolute right-1 top-1')}
-                  <button onClick={() => setSel(f.id)} aria-label={`Lihat detail ${f.name}`} title={f.name} className="flex min-h-36 w-full min-w-0 flex-col items-center gap-2 rounded-2xl p-3 pt-9 text-center hover:bg-side">
+                  <button onClick={() => setSel(f.id)} aria-label={`Lihat detail ${f.name}`} title={f.name} className="flex min-h-36 w-full min-w-0 flex-col items-center gap-2 rounded-2xl p-3 pt-9 text-center hover:bg-sel">
                     <span className={`${iconBox(f)} h-16 w-16 rounded-2xl`}><Icon n={f.type === 'Folder' ? 'folder' : 'file'} size={32} /></span>
                     <span className="line-clamp-2 w-full break-words font-semibold">{f.name}</span>
                     <span className="w-full truncate text-sm text-sub">{f.type === 'Folder' ? 'Folder' : `${f.type} · ${fmt(f.size)}`}</span>
@@ -303,12 +368,12 @@ export default function App() {
                 </li>))}
             </ul>
           ) : (
-            <ul className="overflow-hidden rounded-xl border border-line bg-card">
+            <ul className="rounded-xl border border-line bg-card">
               <li aria-hidden="true" className="hidden grid-cols-[1fr_7rem_6rem_8rem] gap-3 border-b border-line py-2 pl-[4.25rem] pr-4 text-sm font-semibold text-sub sm:grid"><span>Nama</span><span>Tipe</span><span>Ukuran</span><span>Diubah</span></li>
               {list.map(f => (
                 <li key={f.id} className="flex items-center gap-1 border-b border-line px-2 py-1 last:border-b-0">
                   {starBtn(f)}
-                  <button onClick={() => setSel(f.id)} aria-label={`Lihat detail ${f.name}`} title={f.name} className="min-h-11 min-w-0 flex-1 rounded-xl px-2 py-1 text-left hover:bg-side sm:grid sm:grid-cols-[1fr_7rem_6rem_8rem] sm:items-center sm:gap-3">
+                  <button onClick={() => setSel(f.id)} aria-label={`Lihat detail ${f.name}`} title={f.name} className="min-h-11 min-w-0 flex-1 rounded-xl px-2 py-1 text-left hover:bg-sel sm:grid sm:grid-cols-[1fr_7rem_6rem_8rem] sm:items-center sm:gap-3">
                     <span className="flex min-w-0 items-center gap-3">
                       <span className={`${iconBox(f)} h-9 w-9 rounded-lg`}><Icon n={f.type === 'Folder' ? 'folder' : 'file'} /></span>
                       <span className="min-w-0">
@@ -325,7 +390,7 @@ export default function App() {
         </main>
       </div>
 
-      <div role="status" aria-live="polite" className="sr-only">{refreshing ? 'Memperbarui daftar file' : ''}</div>
+      <div role="status" aria-live="polite" className="sr-only">{refreshing ? 'Memperbarui daftar file' : live}</div>
       {(pull > 0 || refreshing) && (
         <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-30 flex justify-center md:hidden">
           <div style={{ transform: `translateY(${refreshing ? 8 : pull - 48}px)`, opacity: refreshing ? 1 : Math.min(1, pull / 40), transition: pulling ? 'none' : 'transform .2s, opacity .2s' }} className="flex items-center gap-2 rounded-full border border-edge bg-card px-4 py-2 text-sm font-semibold text-ink shadow-lg">
@@ -333,6 +398,37 @@ export default function App() {
             {refreshing ? 'Memperbarui daftar…' : pull >= 64 ? 'Lepaskan untuk memperbarui' : 'Tarik ke bawah untuk memperbarui'}
           </div>
         </div>)}
+      {dlg === 'storage' && (
+        <Modal title="Rincian penyimpanan simulasi" onClose={() => setDlg(null)}>
+          <Storage bare />
+          <h3 className="mt-4 font-semibold">File terbesar</h3>
+          {sized.length === 0 ? <p className="mt-1 text-sub">Belum ada file bertanda ukuran.</p> : (
+            <ul className="mt-1 flex flex-col gap-1">{sized.slice(0, 5).map(f => <li key={f.id} className="flex justify-between gap-3"><span className="min-w-0 truncate">{f.name}</span><span className="shrink-0 text-sub">{fmt(f.size)}</span></li>)}</ul>)}
+          <p className="mt-2 text-sm text-sub">Sisa pemakaian ({fmt(BASE_USED)}) adalah data simulasi fiktif yang tidak ditampilkan sebagai file.</p>
+          <button onClick={() => setDlg('manage')} className={PRIMARY + ' mt-4 w-full'}>Kelola file</button>
+        </Modal>)}
+      {dlg === 'manage' && (
+        <Modal title="Kelola file" onClose={() => { setDlg(null); setDel(null) }}>
+          <p className="text-sub">Periksa file simulasi dan ukurannya. Tidak ada file yang dihapus otomatis. Tersisa {fmt(left)} dari 1 GB.</p>
+          {sized.length === 0 ? <p className="mt-3 font-semibold">Tidak ada file yang dapat dikelola.</p> : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {sized.map(f => (
+                <li key={f.id} className="rounded-xl border border-line p-3">
+                  <p className="break-words font-semibold">{f.name}</p>
+                  <p className="text-sm text-sub">{f.type} · {fmt(f.size)}</p>
+                  {del === f.id ? (
+                    <div className="mt-2">
+                      <p className="flex items-center gap-2 font-semibold text-bad"><Icon n="alert" size={18} />Hapus permanen?</p>
+                      <p className="text-sm">"{f.name}" ({fmt(f.size)}) akan dihapus dari data simulasi aplikasi ini dan tidak bisa dikembalikan. Ruang tersisa bertambah {fmt(f.size)}.</p>
+                      <div className="mt-2 flex flex-wrap gap-2"><button onClick={() => removeFile(f)} className={DANGER}>Ya, hapus permanen</button><button autoFocus onClick={() => setDel(null)} className={SECOND}>Batal</button></div>
+                    </div>) : (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button onClick={() => trashFile(f)} className={SECOND}>Pindahkan ke Sampah</button>
+                      <button onClick={() => setDel(f.id)} className={SECOND}>Hapus permanen</button>
+                    </div>)}
+                </li>))}
+            </ul>)}
+        </Modal>)}
       {drawer && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setDrawer(false)} aria-hidden="true" />
@@ -373,19 +469,21 @@ export default function App() {
           </div>
           <div className="mt-3"><label htmlFor="net" className="font-semibold">Simulasi kondisi jaringan</label>
             <select id="net" value={mode} onChange={e => setMode(e.target.value)} className="mt-1 block min-h-11 w-full rounded-xl border border-edge px-2">
-              <option value="normal">Normal</option><option value="slow">Koneksi lambat</option><option value="fail">Koneksi terputus (upload gagal)</option>
-            </select></div>
+              <option value="normal">Normal</option><option value="slow">Koneksi lambat</option><option value="fail">Gagal di tengah proses (simulasi)</option>
+            </select><p className="mt-1 text-sm text-sub">Pilihan ini hanya mensimulasikan kondisi jaringan; tidak ada koneksi atau server sungguhan.</p></div>
           <ul className="mt-4 flex flex-col gap-3">
             {ups.map(u => { const [label, icon, color] = STATUS[u.status]; return (
               <li key={u.id} className="rounded-xl border border-line p-3">
                 <p className="break-words font-semibold">{u.name} <span className="font-normal text-sub">({fmt(u.size)})</span></p>
-                <p className={`font-bold ${color}`}><Icon n={icon} size={18} className="mr-1 inline" />Status: {label}{u.status === 'uploading' && ` – ${u.progress}%`}{u.status === 'uploading' && u.mode === 'slow' && ' (koneksi lambat, mohon tunggu)'}</p>
+                <p className={`font-bold ${color}`}><Icon n={icon} size={18} className="mr-1 inline" />Status: {label}{u.status === 'uploading' && ` – ${u.progress}%`}{u.status === 'uploading'}</p>
+                {u.status === 'uploading' && Date.now() - u.t0 > 5000 && <p className="mt-1 flex items-start gap-2 text-sm text-warn"><Icon n="alert" size={18} className="mt-0.5" /><span>Pengunggahan membutuhkan waktu lebih lama. Periksa koneksi internet Anda. <span className="text-sub">(Simulasi prototype: koneksi Anda tidak benar-benar diukur, dan proses masih berjalan.)</span></span></p>}
                 {(u.status === 'uploading' || u.status === 'success') && <div role="progressbar" aria-label={`Progres upload ${u.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={u.progress} className="my-2 h-4 overflow-hidden rounded bg-line"><div style={{ width: u.progress + '%' }} className="h-full bg-brand-hover transition-all" /></div>}
                 {u.status === 'failed' && <p role="alert" className="font-semibold text-bad">Penyebab: {u.reason}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {u.status === 'uploading' && <button onClick={() => upd(u.id, { status: 'cancelled' })} className={SECOND}>Batalkan upload</button>}
                   {u.status === 'ready' && <button onClick={() => upd(u.id, { status: 'cancelled' })} className={SECOND}>Hapus dari daftar</button>}
                   {u.status === 'failed' && !u.tooBig && <button onClick={() => retry(u.id)} className={PRIMARY}>Coba lagi</button>}
+                  {u.status === 'failed' && u.quota && <button onClick={() => setDlg('manage')} className={SECOND}>Kelola file</button>}
                   {u.status === 'failed' && u.tooBig && <button onClick={() => input.current.click()} className={PRIMARY}>Pilih file lain</button>}
                   {u.status === 'cancelled' && <button onClick={() => upd(u.id, { status: 'ready' })} className={SECOND}>Siapkan lagi</button>}
                   {u.status === 'success' && u.fileId && <button onClick={() => view(u)} className={PRIMARY}>Lihat file</button>}
@@ -434,12 +532,17 @@ export default function App() {
         <button className={SECOND} onClick={() => { setMenu(null); setNav('files'); setDlg('upload') }}><Icon n="upload" />Upload file</button>
       </div>)
   }
-  function Storage() {
+  function Storage({ bare }) {
+    const c = LEVELS[level]
     return (
-      <div className="mt-auto rounded-xl bg-card border border-line p-3">
-        <p className="font-semibold">Penyimpanan</p>
-        <div role="progressbar" aria-label="Penyimpanan terpakai" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} className="my-2 h-3 overflow-hidden rounded bg-line"><div style={{ width: pct + '%' }} className="h-full bg-brand-hover" /></div>
-        <p className="text-sm">{fmt(used)} dari 15 GB terpakai ({pct}%)</p>
+      <div className="mt-auto rounded-xl border border-line bg-card p-3">
+        <p className="font-semibold">Penyimpanan simulasi</p>
+        <div role="progressbar" aria-label="Penyimpanan simulasi terpakai" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-valuetext={`${pct}% digunakan`} className="my-2 h-3 overflow-hidden rounded bg-line"><div style={{ width: pct + '%' }} className={`h-full ${c ? c.bar : 'bg-brand-hover'}`} /></div>
+        <p className="text-sm font-semibold">{fmt(used)} dari 1 GB terpakai</p>
+        <p className="text-sm text-sub">{fmt(left)} tersisa · {pct}% digunakan</p>
+        {c && <p className={`mt-1 flex items-center gap-1 text-sm font-semibold ${c.text}`}><Icon n={c.icon} size={16} />{c.label}</p>}
+        <p className="mt-1 text-sm text-sub">Angka demonstrasi, bukan kapasitas Google Drive atau server sungguhan.</p>
+        {!bare && <button onClick={() => { setDrawer(false); setDlg('storage') }} className={SECOND + ' mt-2 w-full'}>Kelola penyimpanan</button>}
       </div>)
   }
 }
