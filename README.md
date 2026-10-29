@@ -59,3 +59,4 @@ Hanya `src/index.css` (token warna lewat `@theme`) dan `src/App.jsx` (kelas gaya
 
 ## Simulasi Audit (Mode Demonstrasi)
 Di **Kelola penyimpanan** ada bagian "Mode Demonstrasi": *Hampir Penuh* (95%), *Penuh* (100%, memunculkan modal peringatan), dan *Reset ke Kondisi Normal*. Sumber data tunggal: `used = realUsed + simExtra`; reset hanya mengembalikan `simExtra = 0`, file tidak dihapus. Status simulasi tidak disimpan (refresh = normal). Saat penuh, upload ditolak dan tidak masuk daftar. Modal kini mengunci fokus (Tab/Shift+Tab), menutup dengan Escape, dan mengembalikan fokus ke tombol pemicu.
+s
