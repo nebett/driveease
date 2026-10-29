@@ -72,14 +72,27 @@ function Icon({ n, size = 20, fill, className = '' }) {
 
 function Modal({ title, onClose, children }) {
   const id = useId()
+  const ref = useRef()
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
   useEffect(() => {
-    const h = e => e.key === 'Escape' && onClose()
+    const prev = document.activeElement
+    const items = () => [...ref.current.querySelectorAll('button,[href],input,select,textarea')].filter(e => !e.disabled)
+    if (!ref.current.contains(document.activeElement)) (items()[0] || ref.current).focus()
+    const h = e => {
+      if (e.key === 'Escape') return closeRef.current()
+      if (e.key !== 'Tab') return
+      const f = items(); if (!f.length) return
+      const a = f[0], z = f[f.length - 1]
+      if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus() }
+      else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus() }
+    }
     addEventListener('keydown', h)
-    return () => removeEventListener('keydown', h)
-  }, [onClose])
+    return () => { removeEventListener('keydown', h); if (prev && prev.isConnected) prev.focus() }
+  }, [])
   return (
     <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-3">
-      <div role="dialog" aria-modal="true" aria-labelledby={id} className="max-h-[92vh] w-full max-w-xl overflow-auto rounded-2xl bg-card p-5 shadow-xl">
+      <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={id} className="max-h-[92vh] w-full max-w-xl overflow-auto rounded-2xl bg-card p-5 shadow-xl">
         <div className="mb-3 flex items-start justify-between gap-3">
           <h2 id={id} className="text-xl font-bold">{title}</h2>
           <button onClick={onClose} className={SECOND}>Tutup</button>
@@ -110,6 +123,7 @@ export default function App() {
   const [drawer, setDrawer] = useState(false)
   const [warnOff, setWarnOff] = useState('')
   const [del, setDel] = useState(null)
+  const [simExtra, setSimExtra] = useState(0) // Simulasi Audit: tambahan pemakaian fiktif (0 = normal), tidak disimpan di localStorage
   const [live, setLive] = useState('')
   const prevSt = useRef({})
   const [fname, setFname] = useState('')
@@ -207,9 +221,10 @@ export default function App() {
     return nav === 'home' ? l.slice(0, 6) : l
   }, [files, nav, q])
 
-  const used = BASE_USED + files.filter(f => !f.trash).reduce((s, f) => s + (f.size || 0), 0)
-  const pct = Math.min(100, Math.floor(used / TOTAL * 100))
-  const left = Math.max(0, TOTAL - used)
+  const realUsed = BASE_USED + files.filter(f => !f.trash).reduce((s, f) => s + (f.size || 0), 0)
+  const used = realUsed + simExtra
+  const pct = Math.min(100, Math.floor(used / TOTAL * 100 + 1e-6))
+  const left = TOTAL - used < 1 ? 0 : TOTAL - used
   const level = left <= 0 ? 'full' : pct >= 95 ? 'critical' : pct >= 80 ? 'warn' : 'normal'
   const selFile = files.find(f => f.id === sel)
   const patch = (id, p) => setFiles(fs => fs.map(f => f.id === id ? { ...f, ...p } : f))
@@ -239,7 +254,9 @@ export default function App() {
     setUps(u => [...n, ...u])
     setToast(`${n.length} file dipilih. Tekan "Mulai upload" untuk melanjutkan.`)
   }
-  const quotaMsg = (size, avail) => `Ukuran file (${fmt(size)}) melebihi sisa penyimpanan simulasi (${fmt(Math.max(0, avail))}). File tidak diunggah dan tidak ditambahkan ke daftar. Gunakan "Kelola file" untuk mengosongkan ruang, lalu tekan "Coba lagi".`
+  const quotaMsg = (size, avail) => avail < 1
+    ? 'Penyimpanan simulasi penuh, sehingga file ini tidak dapat ditambahkan. File tidak diunggah dan tidak masuk ke daftar. Gunakan "Kelola file" untuk mengosongkan ruang, lalu tekan "Coba lagi".'
+    : `Ukuran file (${fmt(size)}) melebihi sisa penyimpanan simulasi (${fmt(avail)}). File tidak diunggah dan tidak ditambahkan ke daftar. Gunakan "Kelola file" untuk mengosongkan ruang, lalu tekan "Coba lagi".`
   const room = () => TOTAL - used - ups.filter(u => u.status === 'uploading').reduce((a, u) => a + u.size, 0)
   const start = () => {
     let avail = room()
@@ -257,6 +274,12 @@ export default function App() {
   }
   const removeFile = f => { setFiles(fs => fs.filter(x => x.id !== f.id)); setDel(null); setToast(`"${f.name}" dihapus permanen dari data simulasi. Ruang bertambah ${fmt(f.size)}.`) }
   const trashFile = f => { patch(f.id, { trash: true }); setToast(`"${f.name}" dipindahkan ke Sampah (bisa dikembalikan). Ruang bertambah ${fmt(f.size)}.`) }
+  const simulate = pct => {
+    setSimExtra(Math.max(0, pct / 100 * TOTAL - realUsed)); setWarnOff('')
+    if (pct >= 100) setDlg('full')
+    else { setDlg(null); scrollTo({ top: 0 }); setToast('Simulasi Audit aktif: penyimpanan simulasi ' + pct + '% terpakai (hanya demonstrasi).') }
+  }
+  const resetSim = () => { setSimExtra(0); setWarnOff(''); setToast('Mode simulasi direset. Kapasitas kembali ke kondisi awal; file Anda tidak dihapus.') }
   const sized = files.filter(f => !f.trash && f.size != null).sort((a, b) => b.size - a.size)
   const view = u => { if (!files.some(f => f.id === u.fileId)) return setToast('File ini sudah tidak ada di daftar.'); setDlg(null); setNav('files'); setQ(''); setSel(u.fileId) }
   const createFolder = e => {
@@ -331,7 +354,7 @@ export default function App() {
                 <div className="min-w-0 flex-1">
                   <p className={`font-bold ${LEVELS[level].text}`}>{LEVELS[level].title} ({pct}%)</p>
                   <p>{LEVELS[level].desc}</p>
-                  <p className="text-sm text-sub">Ini penyimpanan simulasi untuk demonstrasi. Tidak ada file yang dihapus otomatis.</p>
+                  <p className="text-sm text-sub">Ini penyimpanan simulasi untuk demonstrasi. Tidak ada file yang dihapus otomatis.{simExtra > 0 && ' Mode Demonstrasi (Simulasi Audit) sedang aktif; reset lewat Kelola penyimpanan.'}</p>
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -398,14 +421,34 @@ export default function App() {
             {refreshing ? 'Memperbarui daftar…' : pull >= 64 ? 'Lepaskan untuk memperbarui' : 'Tarik ke bawah untuk memperbarui'}
           </div>
         </div>)}
+      {dlg === 'full' && (
+        <Modal title="Penyimpanan Simulasi Penuh" onClose={() => setDlg(null)}>
+          <div className="flex items-start gap-3"><Icon n="alert" size={28} className="mt-0.5 text-bad" /><p>Kapasitas penyimpanan simulasi telah mencapai batas maksimum. File baru yang ukurannya melebihi ruang tersedia tidak dapat ditambahkan dalam skenario ini.</p></div>
+          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-xl border border-line p-3">
+            <dt className="text-sub">Kapasitas</dt><dd className="font-semibold">1 GB</dd>
+            <dt className="text-sub">Terpakai</dt><dd className="font-semibold">{left === 0 ? '1 GB' : fmt(used)} ({pct}%)</dd>
+            <dt className="text-sub">Tersedia</dt><dd className="font-semibold">{left === 0 ? '0 MB' : fmt(left)}</dd>
+          </dl>
+          <p className="mt-3 text-sm text-sub">Ini merupakan simulasi untuk demonstrasi prototype DriveEase. Data ini bukan kapasitas Google Drive atau server sungguhan.</p>
+          <button onClick={() => setDlg('manage')} className={PRIMARY + ' mt-4'}>Kelola File</button>
+        </Modal>)}
       {dlg === 'storage' && (
         <Modal title="Rincian penyimpanan simulasi" onClose={() => setDlg(null)}>
           <Storage bare />
           <h3 className="mt-4 font-semibold">File terbesar</h3>
           {sized.length === 0 ? <p className="mt-1 text-sub">Belum ada file bertanda ukuran.</p> : (
             <ul className="mt-1 flex flex-col gap-1">{sized.slice(0, 5).map(f => <li key={f.id} className="flex justify-between gap-3"><span className="min-w-0 truncate">{f.name}</span><span className="shrink-0 text-sub">{fmt(f.size)}</span></li>)}</ul>)}
-          <p className="mt-2 text-sm text-sub">Sisa pemakaian ({fmt(BASE_USED)}) adalah data simulasi fiktif yang tidak ditampilkan sebagai file.</p>
+          <p className="mt-2 text-sm text-sub">Sisa pemakaian ({fmt(BASE_USED + simExtra)}) adalah data simulasi fiktif yang tidak ditampilkan sebagai file.</p>
           <button onClick={() => setDlg('manage')} className={PRIMARY + ' mt-4 w-full'}>Kelola file</button>
+          <section aria-labelledby="demo-h" className="mt-5 rounded-xl border border-dashed border-edge p-3">
+            <h3 id="demo-h" className="font-semibold">Mode Demonstrasi (Simulasi Audit)</h3>
+            <p className="mt-1 text-sm text-sub">Hanya untuk demonstrasi prototype DriveEase. Tidak mengubah kapasitas Google Drive atau server sungguhan dan tidak menghapus file. Status: {simExtra > 0 ? 'aktif' : 'tidak aktif'}.</p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <button onClick={() => simulate(95)} className={SECOND}>Simulasikan Penyimpanan Hampir Penuh</button>
+              <button onClick={() => simulate(100)} className={SECOND}>Simulasikan Penyimpanan Penuh</button>
+              <button onClick={resetSim} className={SECOND}>Reset ke Kondisi Normal</button>
+            </div>
+          </section>
         </Modal>)}
       {dlg === 'manage' && (
         <Modal title="Kelola file" onClose={() => { setDlg(null); setDel(null) }}>
@@ -458,6 +501,7 @@ export default function App() {
 
       {dlg === 'upload' && (
         <Modal title="Upload file" onClose={() => setDlg(null)}>
+          {level === 'full' && <p role="alert" className="mb-3 flex items-start gap-2 font-semibold text-bad"><Icon n="xcircle" className="mt-0.5" />Penyimpanan simulasi penuh: file baru tidak dapat ditambahkan. Pilih "Kelola file" untuk mengosongkan ruang.</p>}
           <p className="mb-3 text-sub">Pilih file dari perangkat atau seret ke kotak di bawah. <strong>Ini simulasi:</strong> file tidak dikirim ke server mana pun.</p>
           <div onDragOver={e => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)} onDrop={e => { e.preventDefault(); setDrag(false); addFiles(e.dataTransfer.files) }}
             className={`rounded-xl border-2 border-dashed p-6 text-center ${drag ? 'border-brand-hover bg-sel/50' : 'border-edge'}`}>
@@ -540,6 +584,7 @@ export default function App() {
         <div role="progressbar" aria-label="Penyimpanan simulasi terpakai" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-valuetext={`${pct}% digunakan`} className="my-2 h-3 overflow-hidden rounded bg-line"><div style={{ width: pct + '%' }} className={`h-full ${c ? c.bar : 'bg-brand-hover'}`} /></div>
         <p className="text-sm font-semibold">{fmt(used)} dari 1 GB terpakai</p>
         <p className="text-sm text-sub">{fmt(left)} tersisa · {pct}% digunakan</p>
+        {simExtra > 0 && <p className="mt-1 flex items-center gap-1 text-sm font-semibold"><Icon n="sliders" size={16} />Mode demonstrasi aktif</p>}
         {c && <p className={`mt-1 flex items-center gap-1 text-sm font-semibold ${c.text}`}><Icon n={c.icon} size={16} />{c.label}</p>}
         <p className="mt-1 text-sm text-sub">Angka demonstrasi, bukan kapasitas Google Drive atau server sungguhan.</p>
         {!bare && <button onClick={() => { setDrawer(false); setDlg('storage') }} className={SECOND + ' mt-2 w-full'}>Kelola penyimpanan</button>}

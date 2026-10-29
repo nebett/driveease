@@ -56,3 +56,6 @@ Hanya `src/index.css` (token warna lewat `@theme`) dan `src/App.jsx` (kelas gaya
 ## Peringatan penyimpanan bertingkat & pengujian (dev)
 - Normal < 80%, Hampir penuh 80–94%, Kritis 95–99%, Penuh 100%. Kartu peringatan (bisa ditutup, muncul lagi jika tingkat berubah) punya tombol **Kelola file** dan **Lihat penggunaan/rincian**. Kelola file: pindah ke Sampah atau hapus permanen (dengan konfirmasi); kapasitas dihitung ulang dari data yang sama. Upload yang melebihi sisa ruang ditolak dan tidak masuk daftar.
 - **Uji kondisi (hanya `npm run dev`):** buka `http://localhost:5173/?storage=69`, `85`, `97`, atau `100`. Parameter ini diabaikan pada build produksi (GitHub Pages) dan tidak ada tombolnya di UI.
+
+## Simulasi Audit (Mode Demonstrasi)
+Di **Kelola penyimpanan** ada bagian "Mode Demonstrasi": *Hampir Penuh* (95%), *Penuh* (100%, memunculkan modal peringatan), dan *Reset ke Kondisi Normal*. Sumber data tunggal: `used = realUsed + simExtra`; reset hanya mengembalikan `simExtra = 0`, file tidak dihapus. Status simulasi tidak disimpan (refresh = normal). Saat penuh, upload ditolak dan tidak masuk daftar. Modal kini mengunci fokus (Tab/Shift+Tab), menutup dengan Escape, dan mengembalikan fokus ke tombol pemicu.
