@@ -59,4 +59,9 @@ Hanya `src/index.css` (token warna lewat `@theme`) dan `src/App.jsx` (kelas gaya
 
 ## Simulasi Audit (Mode Demonstrasi)
 Di **Kelola penyimpanan** ada bagian "Mode Demonstrasi": *Hampir Penuh* (95%), *Penuh* (100%, memunculkan modal peringatan), dan *Reset ke Kondisi Normal*. Sumber data tunggal: `used = realUsed + simExtra`; reset hanya mengembalikan `simExtra = 0`, file tidak dihapus. Status simulasi tidak disimpan (refresh = normal). Saat penuh, upload ditolak dan tidak masuk daftar. Modal kini mengunci fokus (Tab/Shift+Tab), menutup dengan Escape, dan mengembalikan fokus ke tombol pemicu.
-s
+
+## Memastikan versi yang tampil sudah terbaru
+Buka **Profil**: baris "Versi build" menampilkan kode commit (di GitHub Pages) atau "lokal" (di `npm run dev`). Samakan kode commit itu dengan `git log -1 --format=%h` di komputer Anda. Jika berbeda, deployment belum memakai commit terbaru.
+
+## Folder bersarang
+Setiap item punya `parent` (id folder, `null` = Drive Saya). Klik folder untuk masuk (File Saya), breadcrumb dan tombol kembali untuk naik, folder kosong menampilkan "Folder ini kosong". Folder/upload baru masuk ke folder yang sedang dibuka. Memindahkan folder ke Sampah juga menyembunyikan isinya dan tidak menghitungnya di penyimpanan; mengembalikannya memulihkan isinya. Pencarian mencari di seluruh Drive. Tombol **Detail** (ikon info) membuka rincian item, termasuk folder.

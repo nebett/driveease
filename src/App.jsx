@@ -3,13 +3,14 @@ import { useState, useEffect, useMemo, useRef, useId } from 'react'
 // ---------- Data contoh (fiktif) ----------
 const MB = 1048576
 const seed = [
-  { id: 1, name: 'Tugas IMK', type: 'Folder', size: null, mod: '20 Okt 2026', ts: 9, star: false, trash: false, share: 'private' },
-  { id: 2, name: 'Foto Kegiatan', type: 'Folder', size: null, mod: '12 Okt 2026', ts: 6, star: true, trash: false, share: 'private' },
-  { id: 3, name: 'Laporan Audit IMK.docx', type: 'Dokumen', size: 1.2 * MB, mod: '25 Okt 2026', ts: 10, star: true, trash: false, share: 'private' },
-  { id: 4, name: 'Jadwal Kuliah.pdf', type: 'PDF', size: 0.4 * MB, mod: '18 Okt 2026', ts: 8, star: false, trash: false, share: 'private' },
-  { id: 5, name: 'Sketsa Antarmuka.png', type: 'Gambar', size: 2.8 * MB, mod: '15 Okt 2026', ts: 7, star: false, trash: false, share: 'private' },
-  { id: 6, name: 'Data Survei.xlsx', type: 'Spreadsheet', size: 0.9 * MB, mod: '2 Okt 2026', ts: 4, star: false, trash: false, share: 'private' },
-  { id: 7, name: 'Draf Lama.docx', type: 'Dokumen', size: 0.3 * MB, mod: '1 Sep 2026', ts: 2, star: false, trash: true, share: 'private' },
+  { id: 1, parent: null, name: 'Tugas IMK', type: 'Folder', size: null, mod: '20 Okt 2026', ts: 9, star: false, trash: false, share: 'private' },
+  { id: 2, parent: null, name: 'Foto Kegiatan', type: 'Folder', size: null, mod: '12 Okt 2026', ts: 6, star: true, trash: false, share: 'private' },
+  { id: 3, parent: 8, name: 'Laporan Audit IMK.docx', type: 'Dokumen', size: 1.2 * MB, mod: '25 Okt 2026', ts: 10, star: true, trash: false, share: 'private' },
+  { id: 4, parent: null, name: 'Jadwal Kuliah.pdf', type: 'PDF', size: 0.4 * MB, mod: '18 Okt 2026', ts: 8, star: false, trash: false, share: 'private' },
+  { id: 5, parent: 1, name: 'Sketsa Antarmuka.png', type: 'Gambar', size: 2.8 * MB, mod: '15 Okt 2026', ts: 7, star: false, trash: false, share: 'private' },
+  { id: 6, parent: null, name: 'Data Survei.xlsx', type: 'Spreadsheet', size: 0.9 * MB, mod: '2 Okt 2026', ts: 4, star: false, trash: false, share: 'private' },
+  { id: 7, parent: null, name: 'Draf Lama.docx', type: 'Dokumen', size: 0.3 * MB, mod: '1 Sep 2026', ts: 2, star: false, trash: true, share: 'private' },
+  { id: 8, parent: 1, name: 'Laporan', type: 'Folder', size: null, mod: '22 Okt 2026', ts: 5, star: false, trash: false, share: 'private' },
 ]
 const NAV = [['home', 'Beranda', 'home'], ['files', 'File Saya', 'folder'], ['recent', 'Terbaru', 'clock'], ['star', 'Berbintang', 'star'], ['trash', 'Sampah', 'trash']]
 const TOTAL = 1024 * MB, LIMIT = 50 * MB // penyimpanan SIMULASI 1 GB
@@ -41,6 +42,9 @@ const DANGER = B + 'justify-center bg-bad text-card hover:opacity-90'
 
 // Ikon SVG outline bergaya sama (24x24, garis 1.75) – tanpa library tambahan
 const P = {
+  back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  chevron: '<path d="m9 18 6-6-6-6"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
@@ -123,6 +127,7 @@ export default function App() {
   const [drawer, setDrawer] = useState(false)
   const [warnOff, setWarnOff] = useState('')
   const [del, setDel] = useState(null)
+  const [cwd, setCwd] = useState(null) // id folder yang sedang dibuka (null = Drive Saya)
   const [simExtra, setSimExtra] = useState(0) // Simulasi Audit: tambahan pemakaian fiktif (0 = normal), tidak disimpan di localStorage
   const [live, setLive] = useState('')
   const prevSt = useRef({})
@@ -160,7 +165,7 @@ export default function App() {
       if (u.status === 'success' && !added.current.has(u.id)) {
         added.current.add(u.id)
         const fid = nextId.current++
-        setFiles(fs => [{ id: fid, name: u.name, type: typeOf(u.name), size: u.size, mod: 'Baru saja', ts: Date.now(), star: false, trash: false, share: 'private' }, ...fs])
+        setFiles(fs => [{ id: fid, name: u.name, type: typeOf(u.name), parent: u.parent ?? null, size: u.size, mod: 'Baru saja', ts: Date.now(), star: false, trash: false, share: 'private' }, ...fs])
         setUps(us => us.map(x => x.id === u.id ? { ...x, fileId: fid } : x))
         setToast(`Simulasi pengunggahan berhasil: ${u.name}`)
       }
@@ -213,15 +218,25 @@ export default function App() {
     return () => { removeEventListener('touchstart', ts); removeEventListener('touchmove', tm); removeEventListener('touchend', te); removeEventListener('touchcancel', te); clearTimeout(timer) }
   }, [])
 
+  const byId = Object.fromEntries(files.map(f => [f.id, f]))
+  const inTrash = f => { for (let x = f; x; x = byId[x.parent]) if (x.trash) return true; return false } // sampah juga berlaku untuk isi folder
+  const cur = cwd !== null && byId[cwd] && !inTrash(byId[cwd]) ? cwd : null
+  const curFolder = cur !== null ? byId[cur] : null
+  const path = []
+  for (let x = curFolder; x; x = byId[x.parent]) path.unshift(x)
+  const here = nav === 'files' ? cur : null // folder tujuan untuk folder/upload baru
+
   const list = useMemo(() => {
-    let l = files.filter(f => nav === 'trash' ? f.trash : !f.trash)
+    let l = files.filter(f => nav === 'trash' ? f.trash && !inTrash(byId[f.parent]) : !inTrash(f))
     if (nav === 'star') l = l.filter(f => f.star)
+    if (nav === 'files' && !q) l = l.filter(f => (f.parent ?? null) === cur)
     if (q) l = l.filter(f => f.name.toLowerCase().includes(q.toLowerCase()))
     if (nav === 'recent' || nav === 'home') l = [...l].sort((a, b) => b.ts - a.ts)
+    if (nav === 'files') l = [...l].sort((a, b) => (b.type === 'Folder') - (a.type === 'Folder'))
     return nav === 'home' ? l.slice(0, 6) : l
-  }, [files, nav, q])
+  }, [files, nav, q, cur])
 
-  const realUsed = BASE_USED + files.filter(f => !f.trash).reduce((s, f) => s + (f.size || 0), 0)
+  const realUsed = BASE_USED + files.filter(f => !inTrash(f)).reduce((s, f) => s + (f.size || 0), 0)
   const used = realUsed + simExtra
   const pct = Math.min(100, Math.floor(used / TOTAL * 100 + 1e-6))
   const left = TOTAL - used < 1 ? 0 : TOTAL - used
@@ -243,12 +258,16 @@ export default function App() {
       if (m) setLive(`${m}: ${u.name}`)
     })
   }, [ups])
+  const openFolder = f => { setNav('files'); setQ(''); setCwd(f.id); scrollTo({ top: 0 }) }
+  const openItem = f => (f.type === 'Folder' && !f.trash ? openFolder(f) : setSel(f.id))
+  const infoBtn = (f, cls = '') => (
+    <button aria-label={`Detail ${f.name}`} onClick={() => setSel(f.id)} className={`${B} min-w-11 justify-center px-0! hover:bg-sel ${cls}`}><Icon n="info" className="text-sub" /></button>)
   const iconBox = f => `grid shrink-0 place-items-center ${f.type === 'Folder' ? 'bg-sel text-accent' : 'bg-bg text-sub'}`
 
   const addFiles = fl => {
     const n = [...fl].map(f => {
       const tooBig = f.size > LIMIT
-      return { id: nextId.current++, name: f.name, size: f.size, progress: 0, status: tooBig ? 'failed' : 'ready', tooBig,
+      return { id: nextId.current++, name: f.name, parent: here, size: f.size, progress: 0, status: tooBig ? 'failed' : 'ready', tooBig,
         reason: tooBig ? 'Ukuran file melebihi batas 50 MB (simulasi). Pilih file yang lebih kecil, atau kompres file ini.' : '' }
     })
     setUps(u => [...n, ...u])
@@ -280,20 +299,20 @@ export default function App() {
     else { setDlg(null); scrollTo({ top: 0 }); setToast('Simulasi Audit aktif: penyimpanan simulasi ' + pct + '% terpakai (hanya demonstrasi).') }
   }
   const resetSim = () => { setSimExtra(0); setWarnOff(''); setToast('Mode simulasi direset. Kapasitas kembali ke kondisi awal; file Anda tidak dihapus.') }
-  const sized = files.filter(f => !f.trash && f.size != null).sort((a, b) => b.size - a.size)
-  const view = u => { if (!files.some(f => f.id === u.fileId)) return setToast('File ini sudah tidak ada di daftar.'); setDlg(null); setNav('files'); setQ(''); setSel(u.fileId) }
+  const sized = files.filter(f => !inTrash(f) && f.size != null).sort((a, b) => b.size - a.size)
+  const view = u => { if (!files.some(f => f.id === u.fileId)) return setToast('File ini sudah tidak ada di daftar.'); setDlg(null); setNav('files'); setQ(''); setCwd(u.parent ?? null); setSel(u.fileId) }
   const createFolder = e => {
     e.preventDefault()
     const n = fname.trim()
     if (!n) return setFerr('Nama folder belum diisi. Ketik nama, misalnya "Tugas Kuliah".')
-    if (files.some(f => !f.trash && f.name.toLowerCase() === n.toLowerCase())) return setFerr('Nama ini sudah dipakai. Gunakan nama lain.')
-    setFiles(fs => [{ id: nextId.current++, name: n, type: 'Folder', size: null, mod: 'Baru saja', ts: Date.now(), star: false, trash: false, share: 'private' }, ...fs])
+    if (files.some(f => !f.trash && (f.parent ?? null) === here && f.name.toLowerCase() === n.toLowerCase())) return setFerr('Nama ini sudah dipakai. Gunakan nama lain.')
+    setFiles(fs => [{ id: nextId.current++, name: n, type: 'Folder', parent: here, size: null, mod: 'Baru saja', ts: Date.now(), star: false, trash: false, share: 'private' }, ...fs])
     setDlg(null); setFname(''); setFerr(''); setToast(`Folder "${n}" dibuat.`)
   }
   const setShare = v => v === 'public' ? setConfirmPublic(true) : (patch(sel, { share: 'private' }), setToast('Akses diubah: hanya Anda yang bisa membuka file ini.'))
 
   const NavBtns = ({ cls }) => NAV.map(([k, l, i]) => (
-    <button key={k} onClick={() => { setNav(k); setMenu(null); setDrawer(false) }} aria-current={nav === k ? 'page' : undefined}
+    <button key={k} onClick={() => { setNav(k); setMenu(null); setDrawer(false); if (k === 'files') setCwd(null) }} aria-current={nav === k ? 'page' : undefined}
       className={`${B} whitespace-nowrap ${cls} ${nav === k ? 'bg-sel text-ink font-bold shadow-[inset_4px_0_0_var(--c-brand-hover)]' : 'text-ink hover:bg-sel/60'}`}>
       <Icon n={i} className={nav === k ? 'text-accent' : ''} />{l}
     </button>))
@@ -342,6 +361,7 @@ export default function App() {
                       <input type="radio" name="tema" className="h-5 w-5" checked={theme === v} onChange={() => setTheme(v)} /><Icon n={i} />{l}
                     </label>))}
                 </fieldset>
+                <p className="mt-3 text-sm text-sub">Versi build: {__BUILD_ID__}</p>
               </div>)}
           </div>
         </header>
@@ -364,18 +384,30 @@ export default function App() {
               </div>
             </div>)}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-2xl font-bold">{titles[nav]}</h2>
+            <h2 className="min-w-0 break-words text-2xl font-bold">{q ? 'Hasil pencarian' : nav === 'files' && curFolder ? curFolder.name : titles[nav]}</h2>
             <div role="group" aria-label="Pilih tampilan file" className="inline-flex gap-1 rounded-xl border border-edge bg-card p-1">
               {[[false, 'Daftar', 'list'], [true, 'Kotak', 'grid']].map(([v, l, i]) => (
                 <button key={l} aria-pressed={grid === v} onClick={() => setGrid(v)} className={`${B} justify-center ${grid === v ? 'bg-sel font-bold shadow-[inset_0_-3px_0_var(--c-accent)]' : 'hover:bg-sel'}`}><Icon n={i} />{l}</button>))}
             </div>
           </div>
+          {nav === 'files' && !q && (
+            <nav aria-label="Lokasi folder" className="mb-3 flex flex-wrap items-center gap-1">
+              {cur !== null && <button onClick={() => setCwd(path.length > 1 ? path[path.length - 2].id : null)} aria-label="Kembali ke folder sebelumnya" className={SECOND + ' px-3!'}><Icon n="back" /></button>}
+              <ol className="flex min-w-0 flex-wrap items-center gap-1">
+                <li><button onClick={() => setCwd(null)} aria-current={cur === null ? 'page' : undefined} className={`${B} px-3 hover:bg-sel ${cur === null ? 'bg-sel font-bold' : ''}`}>Drive Saya</button></li>
+                {path.map((p, i) => (
+                  <li key={p.id} className="flex items-center gap-1">
+                    <Icon n="chevron" size={16} className="text-sub" />
+                    <button onClick={() => setCwd(p.id)} aria-current={i === path.length - 1 ? 'page' : undefined} className={`${B} px-3 hover:bg-sel ${i === path.length - 1 ? 'bg-sel font-bold' : ''}`}><span className="max-w-[40vw] truncate sm:max-w-[16rem]">{p.name}</span></button>
+                  </li>))}
+              </ol>
+            </nav>)}
           {nav === 'home' && <p className="mb-3 text-sub">Selamat datang! Tekan <strong>+ Baru</strong> untuk mengunggah file atau membuat folder. Berikut file yang baru Anda ubah.</p>}
           {nav === 'trash' && <p className="mb-3 text-sub">File di Sampah masih bisa dikembalikan.</p>}
           {list.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-edge bg-card p-8 text-center">
-              <p className="font-semibold">{q ? `Tidak ada file dengan nama "${q}".` : 'Belum ada file di sini.'}</p>
-              <p className="text-sub">{q ? 'Periksa ejaan atau hapus kata pencarian.' : 'Tekan "+ Baru" untuk mulai.'}</p>
+              <p className="font-semibold">{q ? `Tidak ada file dengan nama "${q}".` : nav === 'files' && cur !== null ? 'Folder ini kosong.' : 'Belum ada file di sini.'}</p>
+              <p className="text-sub">{q ? 'Periksa ejaan atau hapus kata pencarian.' : nav === 'files' && cur !== null ? 'Tekan "+ Baru" untuk mengunggah file atau membuat folder di dalam folder ini.' : 'Tekan "+ Baru" untuk mulai.'}</p>
             </div>
           ) : (
             grid ? (
@@ -383,7 +415,8 @@ export default function App() {
               {list.map(f => (
                 <li key={f.id} className="relative rounded-2xl border border-line bg-card">
                   {starBtn(f, 'absolute right-1 top-1')}
-                  <button onClick={() => setSel(f.id)} aria-label={`Lihat detail ${f.name}`} title={f.name} className="flex min-h-36 w-full min-w-0 flex-col items-center gap-2 rounded-2xl p-3 pt-9 text-center hover:bg-sel">
+                  {infoBtn(f, 'absolute left-1 top-1')}
+                  <button onClick={() => openItem(f)} aria-label={f.type === 'Folder' && !f.trash ? `Buka folder ${f.name}` : `Lihat detail ${f.name}`} title={f.name} className="flex min-h-36 w-full min-w-0 flex-col items-center gap-2 rounded-2xl p-3 pt-9 text-center hover:bg-sel">
                     <span className={`${iconBox(f)} h-16 w-16 rounded-2xl`}><Icon n={f.type === 'Folder' ? 'folder' : 'file'} size={32} /></span>
                     <span className="line-clamp-2 w-full break-words font-semibold">{f.name}</span>
                     <span className="w-full truncate text-sm text-sub">{f.type === 'Folder' ? 'Folder' : `${f.type} · ${fmt(f.size)}`}</span>
@@ -392,11 +425,11 @@ export default function App() {
             </ul>
           ) : (
             <ul className="rounded-xl border border-line bg-card">
-              <li aria-hidden="true" className="hidden grid-cols-[1fr_7rem_6rem_8rem] gap-3 border-b border-line py-2 pl-[4.25rem] pr-4 text-sm font-semibold text-sub sm:grid"><span>Nama</span><span>Tipe</span><span>Ukuran</span><span>Diubah</span></li>
+              <li aria-hidden="true" className="hidden grid-cols-[1fr_7rem_6rem_8rem] gap-3 border-b border-line py-2 pl-[4.25rem] pr-16 text-sm font-semibold text-sub sm:grid"><span>Nama</span><span>Tipe</span><span>Ukuran</span><span>Diubah</span></li>
               {list.map(f => (
                 <li key={f.id} className="flex items-center gap-1 border-b border-line px-2 py-1 last:border-b-0">
                   {starBtn(f)}
-                  <button onClick={() => setSel(f.id)} aria-label={`Lihat detail ${f.name}`} title={f.name} className="min-h-11 min-w-0 flex-1 rounded-xl px-2 py-1 text-left hover:bg-sel sm:grid sm:grid-cols-[1fr_7rem_6rem_8rem] sm:items-center sm:gap-3">
+                  <button onClick={() => openItem(f)} aria-label={f.type === 'Folder' && !f.trash ? `Buka folder ${f.name}` : `Lihat detail ${f.name}`} title={f.name} className="min-h-11 min-w-0 flex-1 rounded-xl px-2 py-1 text-left hover:bg-sel sm:grid sm:grid-cols-[1fr_7rem_6rem_8rem] sm:items-center sm:gap-3">
                     <span className="flex min-w-0 items-center gap-3">
                       <span className={`${iconBox(f)} h-9 w-9 rounded-lg`}><Icon n={f.type === 'Folder' ? 'folder' : 'file'} /></span>
                       <span className="min-w-0">
@@ -408,6 +441,7 @@ export default function App() {
                     <span className="hidden text-sub sm:block">{fmt(f.size)}</span>
                     <span className="hidden text-sub sm:block">{f.mod}</span>
                   </button>
+                  {infoBtn(f)}
                 </li>))}
             </ul>))}
         </main>
@@ -560,6 +594,7 @@ export default function App() {
                 <p className="text-sm text-sub">Pilihan awal selalu "Hanya saya". (Simulasi: belum ada tautan nyata.)</p>
               </fieldset>
               <div className="flex flex-wrap gap-2">
+                {selFile.type === 'Folder' && !selFile.trash && <button onClick={() => { openFolder(selFile); setSel(null) }} className={PRIMARY}>Buka folder</button>}
                 {selFile.trash
                   ? <button onClick={() => { patch(sel, { trash: false }); setSel(null); setToast('File dikembalikan.') }} className={PRIMARY}>Kembalikan file</button>
                   : <button onClick={() => { patch(sel, { trash: true }); setSel(null); setToast(`"${selFile.name}" dipindahkan ke Sampah.`) }} className={SECOND}>Pindahkan ke Sampah</button>}
