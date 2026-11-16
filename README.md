@@ -1,4 +1,4 @@
-# DriveEase – Prototype IMK
+# Drive – Prototype IMK
 
 Prototype akademik (bukan aplikasi resmi Google Drive) untuk tugas Interaksi Manusia dan Komputer. Semua data fiktif; **tidak ada file yang dikirim ke server** – upload hanya simulasi.
 
