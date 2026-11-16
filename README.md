@@ -1,4 +1,4 @@
-# Drive – Prototype IMK
+# DriveEase – Prototype IMK
 
 Prototype akademik (bukan aplikasi resmi Google Drive) untuk tugas Interaksi Manusia dan Komputer. Semua data fiktif; **tidak ada file yang dikirim ke server** – upload hanya simulasi.
 
@@ -64,4 +64,4 @@ Di **Kelola penyimpanan** ada bagian "Mode Demonstrasi": *Hampir Penuh* (95%), *
 Buka **Profil**: baris "Versi build" menampilkan kode commit (di GitHub Pages) atau "lokal" (di `npm run dev`). Samakan kode commit itu dengan `git log -1 --format=%h` di komputer Anda. Jika berbeda, deployment belum memakai commit terbaru.
 
 ## Folder bersarang
-Setiap item punya `parent` (id folder, `null` = Drive Saya). Klik folder untuk masuk (File Saya), breadcrumb dan tombol kembali untuk naik, folder kosong menampilkan "Folder ini kosong". Folder/upload baru masuk ke folder yang sedang dibuka. Memindahkan folder ke Sampah juga menyembunyikan isinya dan tidak menghitungnya di penyimpanan; mengembalikannya memulihkan isinya. Pencarian mencari di seluruh Drive. Tombol **Detail** (ikon info) membuka rincian item, termasuk folder.
+Setiap item punya `parent` (id folder, `null` = Drive Saya). Klik folder untuk masuk (File Saya), breadcrumb dan tombol kembali untuk naik, folder kosong menampilkan "Folder ini kosong". Folder/upload baru masuk ke folder yang sedang dibuka. Memindahkan folder ke Sampah juga menyembunyikan isinya dan tidak menghitungnya di penyimpanan; mengembalikannya memulihkan isinya. Pencarian mencari di seluruh DriveEase. Tombol **Detail** (ikon info) membuka rincian item, termasuk folder.

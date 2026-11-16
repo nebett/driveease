@@ -323,7 +323,7 @@ export default function App() {
     <div className="min-h-screen md:flex">
       <a href="#utama" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-card focus:p-3">Lewati ke konten utama</a>
       <aside className="hidden w-56 shrink-0 flex-col gap-2 border-r border-line bg-side p-4 md:sticky md:top-0 md:flex md:h-screen md:self-start md:overflow-y-auto lg:w-64">
-        <h1 className="mb-2 flex items-center gap-2 text-2xl font-extrabold text-ink"><span className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-onbrand"><Icon n="cloud" size={22} /></span>Drive</h1>
+        <h1 className="mb-2 flex items-center gap-2 text-2xl font-extrabold text-ink"><span className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-onbrand"><Icon n="cloud" size={22} /></span>DriveEase</h1>
         <button onClick={() => setMenu(menu === 'new' ? null : 'new')} aria-expanded={menu === 'new'} className={PRIMARY + ' text-lg'}><Icon n="plus" />Baru</button>
         {menu === 'new' && <NewMenu />}
         <nav aria-label="Menu utama" className="mt-2 flex flex-col gap-1"><NavBtns cls="w-full" /></nav>
@@ -333,7 +333,7 @@ export default function App() {
       <div className="min-w-0 flex-1">
         <header className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b md:gap-3 border-line bg-card p-3">
           <button onClick={() => setDrawer(true)} aria-label="Buka menu navigasi" aria-expanded={drawer} className={SECOND + ' px-3! md:hidden'}><Icon n="menu" /></button>
-          <h1 className="flex items-center gap-2 min-w-0 flex-1 text-xl font-extrabold text-ink md:hidden"><Icon n="cloud" size={22} className="text-accent" /><span className="max-[400px]:sr-only">Drive</span></h1>
+          <h1 className="flex items-center gap-2 min-w-0 flex-1 text-xl font-extrabold text-ink md:hidden"><Icon n="cloud" size={22} className="text-accent" /><span className="max-[400px]:sr-only">DriveEase</span></h1>
           <div className="order-last flex w-full items-center gap-2 md:contents">
           <div className="relative min-w-0 flex-1 md:order-first md:max-w-xl">
             <Icon n="search" className="pointer-events-none absolute left-3 top-3 text-sub" />
@@ -463,7 +463,7 @@ export default function App() {
             <dt className="text-sub">Terpakai</dt><dd className="font-semibold">{left === 0 ? '1 GB' : fmt(used)} ({pct}%)</dd>
             <dt className="text-sub">Tersedia</dt><dd className="font-semibold">{left === 0 ? '0 MB' : fmt(left)}</dd>
           </dl>
-          <p className="mt-3 text-sm text-sub">Ini merupakan simulasi untuk demonstrasi prototype Drive. Data ini bukan kapasitas Google Drive atau server sungguhan.</p>
+          <p className="mt-3 text-sm text-sub">Ini merupakan simulasi untuk demonstrasi prototype DriveEase. Data ini bukan kapasitas Google Drive atau server sungguhan.</p>
           <button onClick={() => setDlg('manage')} className={PRIMARY + ' mt-4'}>Kelola File</button>
         </Modal>)}
       {dlg === 'storage' && (
@@ -476,7 +476,7 @@ export default function App() {
           <button onClick={() => setDlg('manage')} className={PRIMARY + ' mt-4 w-full'}>Kelola file</button>
           <section aria-labelledby="demo-h" className="mt-5 rounded-xl border border-dashed border-edge p-3">
             <h3 id="demo-h" className="font-semibold">Mode Demonstrasi (Simulasi Audit)</h3>
-            <p className="mt-1 text-sm text-sub">Hanya untuk demonstrasi prototype Drive. Tidak mengubah kapasitas Google Drive atau server sungguhan dan tidak menghapus file. Status: {simExtra > 0 ? 'aktif' : 'tidak aktif'}.</p>
+            <p className="mt-1 text-sm text-sub">Hanya untuk demonstrasi prototype DriveEase. Tidak mengubah kapasitas Google Drive atau server sungguhan dan tidak menghapus file. Status: {simExtra > 0 ? 'aktif' : 'tidak aktif'}.</p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <button onClick={() => simulate(95)} className={SECOND}>Simulasikan Penyimpanan Hampir Penuh</button>
               <button onClick={() => simulate(100)} className={SECOND}>Simulasikan Penyimpanan Penuh</button>
@@ -511,7 +511,7 @@ export default function App() {
           <div className="absolute inset-0 bg-black/50" onClick={() => setDrawer(false)} aria-hidden="true" />
           <div role="dialog" aria-modal="true" aria-label="Menu navigasi" className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col gap-2 overflow-y-auto bg-side p-4 shadow-xl">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="flex items-center gap-2 text-xl font-extrabold text-ink"><span className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-onbrand"><Icon n="cloud" size={22} /></span>Drive</span>
+              <span className="flex items-center gap-2 text-xl font-extrabold text-ink"><span className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-onbrand"><Icon n="cloud" size={22} /></span>DriveEase</span>
               <button autoFocus onClick={() => setDrawer(false)} aria-label="Tutup menu navigasi" className={SECOND + ' px-3!'}><Icon n="x" /></button>
             </div>
             <nav aria-label="Menu utama" className="flex flex-col gap-1"><NavBtns cls="w-full" /></nav>
