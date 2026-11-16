@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useId } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useId } from 'react'
 
 // ---------- Data contoh (fiktif) ----------
 const MB = 1048576
@@ -42,6 +42,12 @@ const DANGER = B + 'justify-center bg-bad text-card hover:opacity-90'
 
 // Ikon SVG outline bergaya sama (24x24, garis 1.75) – tanpa library tambahan
 const P = {
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  pencil: '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
+  folderup: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="m9 13 3-3 3 3"/>',
+  folderplus: '<path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
   chevron: '<path d="m9 18 6-6-6-6"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
@@ -72,6 +78,39 @@ const P = {
 }
 function Icon({ n, size = 20, fill, className = '' }) {
   return <svg aria-hidden="true" focusable="false" width={size} height={size} viewBox="0 0 24 24" style={{ fill: fill ? 'var(--c-brand)' : 'none' }} stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={'shrink-0 ' + className} dangerouslySetInnerHTML={{ __html: P[n] }} />
+}
+
+// Menu konteks (klik kanan di desktop) dan menu tiga titik (semua perangkat). Posisi dijaga tetap di dalam layar.
+function Menu({ x, y, items, onClose }) {
+  const ref = useRef()
+  const [pos, setPos] = useState(null)
+  useLayoutEffect(() => {
+    const r = ref.current.getBoundingClientRect()
+    setPos({ left: Math.max(8, Math.min(x, innerWidth - r.width - 8)), top: Math.max(8, Math.min(y, innerHeight - r.height - 8)) })
+  }, [x, y])
+  useEffect(() => {
+    const prev = document.activeElement
+    const btns = () => [...ref.current.querySelectorAll('[role="menuitem"]')]
+    btns()[0]?.focus()
+    const key = e => {
+      if (e.key === 'Escape' || e.key === 'Tab') return onClose()
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
+      e.preventDefault()
+      const b = btns(), i = b.indexOf(document.activeElement)
+      b[e.key === 'Home' ? 0 : e.key === 'End' ? b.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + b.length) % b.length].focus()
+    }
+    const away = e => { if (!ref.current.contains(e.target)) onClose() }
+    addEventListener('keydown', key); addEventListener('pointerdown', away, true); addEventListener('resize', onClose); addEventListener('scroll', onClose, true)
+    return () => { removeEventListener('keydown', key); removeEventListener('pointerdown', away, true); removeEventListener('resize', onClose); removeEventListener('scroll', onClose, true); if (prev && prev.isConnected) prev.focus() }
+  }, [])
+  return (
+    <div ref={ref} role="menu" aria-label="Menu tindakan" onContextMenu={e => e.preventDefault()} style={{ left: pos ? pos.left : x, top: pos ? pos.top : y, visibility: pos ? 'visible' : 'hidden' }} className="fixed z-[60] w-60 rounded-xl border border-line bg-card py-1 shadow-xl">
+      {items.map(it => (
+        <div key={it.label} role="none">
+          {it.sep && <div role="separator" className="my-1 border-t border-line" />}
+          <button role="menuitem" onClick={() => { onClose(); it.run() }} className={`flex min-h-11 w-full items-center gap-3 px-4 text-left hover:bg-sel ${it.danger ? 'font-semibold text-bad' : ''}`}><Icon n={it.icon} />{it.label}</button>
+        </div>))}
+    </div>)
 }
 
 function Modal({ title, onClose, children }) {
@@ -128,6 +167,15 @@ export default function App() {
   const [warnOff, setWarnOff] = useState('')
   const [del, setDel] = useState(null)
   const [cwd, setCwd] = useState(null) // id folder yang sedang dibuka (null = Drive Saya)
+  const [ctx, setCtx] = useState(null) // menu konteks / tiga titik: { x, y, id }
+  const [renameId, setRenameId] = useState(null)
+  const [renameVal, setRenameVal] = useState('')
+  const [renameErr, setRenameErr] = useState('')
+  const [itemId, setItemId] = useState(null) // dialog Atur / Kelola
+  const [moveTo, setMoveTo] = useState('')
+  const [moveErr, setMoveErr] = useState('')
+  const [trashAsk, setTrashAsk] = useState(null)
+  const [selMode, setSelMode] = useState('info')
   const [simExtra, setSimExtra] = useState(0) // Simulasi Audit: tambahan pemakaian fiktif (0 = normal), tidak disimpan di localStorage
   const [live, setLive] = useState('')
   const prevSt = useRef({})
@@ -137,8 +185,10 @@ export default function App() {
   const added = useRef(new Set())
   const nextId = useRef(100)
   const input = useRef()
+  const dirInput = useRef()
 
   useEffect(() => { document.documentElement.style.fontSize = big ? '19px' : '16px' }, [big])
+  useEffect(() => { if (sel !== null && selMode === 'share') document.querySelector('input[name="share"]:checked')?.focus() }, [sel, selMode]) // fokus ke pilihan akses saat "Bagikan"
   useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('driveease-theme', theme) } catch { /* abaikan */ } }, [theme])
   useEffect(() => {
     if (!drawer) return
@@ -165,7 +215,7 @@ export default function App() {
       if (u.status === 'success' && !added.current.has(u.id)) {
         added.current.add(u.id)
         const fid = nextId.current++
-        setFiles(fs => [{ id: fid, name: u.name, type: typeOf(u.name), parent: u.parent ?? null, size: u.size, mod: 'Baru saja', ts: Date.now(), star: false, trash: false, share: 'private' }, ...fs])
+        setFiles(fs => [{ id: fid, name: u.name, type: typeOf(u.name), parent: u.parent ?? null, blob: u.file, size: u.size, mod: 'Baru saja', ts: Date.now(), star: false, trash: false, share: 'private' }, ...fs])
         setUps(us => us.map(x => x.id === u.id ? { ...x, fileId: fid } : x))
         setToast(`Simulasi pengunggahan berhasil: ${u.name}`)
       }
@@ -260,18 +310,101 @@ export default function App() {
   }, [ups])
   const openFolder = f => { setNav('files'); setQ(''); setCwd(f.id); scrollTo({ top: 0 }) }
   const openItem = f => (f.type === 'Folder' && !f.trash ? openFolder(f) : setSel(f.id))
-  const infoBtn = (f, cls = '') => (
-    <button aria-label={`Detail ${f.name}`} onClick={() => setSel(f.id)} className={`${B} min-w-11 justify-center px-0! hover:bg-sel ${cls}`}><Icon n="info" className="text-sub" /></button>)
+  const pathStr = f => { const p = []; for (let x = byId[f.parent]; x; x = byId[x.parent]) p.unshift(x.name); return ['Drive Saya', ...p].join(' / ') }
+  const sizeOf = f => (f.type === 'Folder' ? files.filter(x => x.parent === f.id && !x.trash).reduce((a, x) => a + sizeOf(x), 0) : f.size || 0)
+  const openSel = (id, mode = 'info') => { setSelMode(mode); setSel(id) }
+  const download = f => {
+    let blob, name, msg
+    if (f.type === 'Folder') {
+      const lines = []
+      const walk = (id, pre) => files.filter(x => x.parent === id && !x.trash).forEach(x => { lines.push(pre + x.name + (x.type === 'Folder' ? '/' : '')); if (x.type === 'Folder') walk(x.id, pre + '  ') })
+      walk(f.id, '')
+      blob = new Blob([`Daftar isi folder "${f.name}" (simulasi DriveEase)\n\n${lines.join('\n') || '(kosong)'}\n`], { type: 'text/plain' })
+      name = f.name + '-daftar-isi.txt'; msg = 'Download folder disimulasikan: yang diunduh daftar isi (.txt), bukan ZIP.'
+    } else if (f.blob) { blob = f.blob; name = f.name; msg = `"${f.name}" diunduh.` }
+    else { blob = new Blob([`File contoh "${f.name}" (data simulasi DriveEase). Isi asli tidak tersedia.\n`], { type: 'text/plain' }); name = f.name + '.txt'; msg = 'File contoh: yang diunduh berkas placeholder (.txt), bukan isi asli.' }
+    const url = URL.createObjectURL(blob), a = document.createElement('a')
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setToast(msg)
+  }
+  const doRename = e => {
+    e.preventDefault()
+    const f = byId[renameId], n = renameVal.trim()
+    if (!n) return setRenameErr('Nama belum diisi. Ketik nama baru.')
+    if (files.some(x => x.id !== f.id && !x.trash && (x.parent ?? null) === (f.parent ?? null) && x.name.toLowerCase() === n.toLowerCase())) return setRenameErr('Nama ini sudah dipakai di folder yang sama. Gunakan nama lain.')
+    patch(f.id, f.type === 'Folder' ? { name: n } : { name: n, type: typeOf(n) })
+    setRenameId(null); setToast(`Nama diubah menjadi "${n}".`)
+  }
+  const doMove = f => {
+    const dest = moveTo === '' ? null : Number(moveTo)
+    if (dest === (f.parent ?? null)) return setMoveErr('Item sudah berada di lokasi ini.')
+    if (files.some(x => x.id !== f.id && !x.trash && (x.parent ?? null) === dest && x.name.toLowerCase() === f.name.toLowerCase())) return setMoveErr('Sudah ada item dengan nama yang sama di lokasi tujuan.')
+    patch(f.id, { parent: dest }); setItemId(null); setToast(`"${f.name}" dipindahkan ke ${dest === null ? 'Drive Saya' : byId[dest].name}.`)
+  }
+  const confirmTrash = () => { const f = byId[trashAsk]; patch(f.id, { trash: true }); setTrashAsk(null); setToast(`"${f.name}" dipindahkan ke Sampah. Bisa dikembalikan dari menu Sampah.`) }
+  const menuItems = () => {
+    const f = ctx && ctx.id !== null ? byId[ctx.id] : null
+    if (!ctx) return []
+    if (!f) return [
+      { label: 'Upload File', icon: 'upload', run: () => setDlg('upload') },
+      { label: 'Upload Folder', icon: 'folderup', run: () => dirInput.current.click() },
+      { label: 'Buat Folder Baru', icon: 'folderplus', run: () => { setFerr(''); setFname(''); setDlg('folder') } }]
+    const kind = f.type === 'Folder' ? 'Folder' : 'File'
+    if (inTrash(f)) return [
+      { label: `Informasi ${kind}`, icon: 'info', run: () => openSel(f.id) },
+      ...(f.trash ? [{ label: 'Pulihkan', icon: 'refresh', run: () => { patch(f.id, { trash: false }); setToast(`"${f.name}" dipulihkan.`) } }] : [])]
+    return [
+      { label: 'Download', icon: 'download', run: () => download(f) },
+      { label: 'Ganti Nama', icon: 'pencil', sep: true, run: () => { setRenameVal(f.name); setRenameErr(''); setRenameId(f.id) } },
+      { label: 'Bagikan', icon: 'share', run: () => openSel(f.id, 'share') },
+      { label: 'Atur / Kelola', icon: 'sliders', run: () => { setMoveTo(String(f.parent ?? '')); setMoveErr(''); setItemId(f.id) } },
+      { label: `Informasi ${kind}`, icon: 'info', sep: true, run: () => openSel(f.id) },
+      { label: 'Pindahkan ke Sampah', icon: 'trash', sep: true, danger: true, run: () => setTrashAsk(f.id) }]
+  }
+  const onCtx = e => {
+    if (!matchMedia('(pointer: fine)').matches) return // layar sentuh: pakai tombol tiga titik
+    const t = e.target
+    if (t.closest('input,textarea,select,[contenteditable="true"],[role="dialog"],[role="menu"]')) return
+    let x = e.clientX, y = e.clientY
+    if (!x && !y) { const r = t.getBoundingClientRect(); x = r.left; y = r.bottom } // dipicu keyboard (tombol Menu / Shift+F10)
+    const li = t.closest('[data-item]')
+    if (li && byId[li.dataset.item]) { e.preventDefault(); return setCtx({ x, y, id: Number(li.dataset.item) }) }
+    if (t.closest('button,a,nav,header,aside') || !['files', 'home', 'recent'].includes(nav)) return
+    e.preventDefault(); setCtx({ x, y, id: null })
+  }
+  const moreBtn = (f, cls = '') => (
+    <button aria-label={`Menu tindakan ${f.name}`} aria-haspopup="menu" aria-expanded={ctx?.id === f.id} onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setCtx({ x: Math.max(8, r.right - 240), y: r.bottom + 4, id: f.id }) }} className={`${B} min-w-11 justify-center px-0! hover:bg-sel ${cls}`}><Icon n="more" className="text-sub" /></button>)
   const iconBox = f => `grid shrink-0 place-items-center ${f.type === 'Folder' ? 'bg-sel text-accent' : 'bg-bg text-sub'}`
 
-  const addFiles = fl => {
+  const addFiles = (fl, parentOf) => {
     const n = [...fl].map(f => {
       const tooBig = f.size > LIMIT
-      return { id: nextId.current++, name: f.name, parent: here, size: f.size, progress: 0, status: tooBig ? 'failed' : 'ready', tooBig,
+      return { id: nextId.current++, name: f.name, parent: parentOf ? parentOf(f) : here, file: f, size: f.size, progress: 0, status: tooBig ? 'failed' : 'ready', tooBig,
         reason: tooBig ? 'Ukuran file melebihi batas 50 MB (simulasi). Pilih file yang lebih kecil, atau kompres file ini.' : '' }
     })
     setUps(u => [...n, ...u])
     setToast(`${n.length} file dipilih. Tekan "Mulai upload" untuk melanjutkan.`)
+  }
+  // Upload folder (simulasi): buat struktur folder di data aplikasi, lalu antre file-nya lewat alur upload biasa
+  const addFolderUpload = fl => {
+    const list = [...fl]
+    if (!list.length) return
+    const ids = {}, made = []
+    const ensure = parts => {
+      let par = here, key = ''
+      for (const name of parts) {
+        key += '/' + name
+        if (!(key in ids)) {
+          const ex = files.find(x => x.type === 'Folder' && !x.trash && (x.parent ?? null) === par && x.name.toLowerCase() === name.toLowerCase())
+          if (ex) ids[key] = ex.id
+          else { const id = nextId.current++; ids[key] = id; made.push({ id, parent: par, name, type: 'Folder', size: null, mod: 'Baru saja', ts: Date.now(), star: false, trash: false, share: 'private' }) }
+        }
+        par = ids[key]
+      }
+      return par
+    }
+    addFiles(list, f => ensure((f.webkitRelativePath || f.name).split('/').slice(0, -1)))
+    if (made.length) setFiles(fs => [...made, ...fs])
   }
   const quotaMsg = (size, avail) => avail < 1
     ? 'Penyimpanan simulasi penuh, sehingga file ini tidak dapat ditambahkan. File tidak diunggah dan tidak masuk ke daftar. Gunakan "Kelola file" untuk mengosongkan ruang, lalu tekan "Coba lagi".'
@@ -320,7 +453,8 @@ export default function App() {
   const pending = ups.some(u => u.status === 'ready' || u.status === 'uploading')
 
   return (
-    <div className="min-h-screen md:flex">
+    <div className="min-h-screen md:flex" onContextMenu={onCtx}>
+      <input ref={dirInput} type="file" multiple {...{ webkitdirectory: '', directory: '' }} className="hidden" aria-label="Pilih folder dari perangkat" onChange={e => { addFolderUpload(e.target.files); e.target.value = ''; setDlg('upload') }} />
       <a href="#utama" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-card focus:p-3">Lewati ke konten utama</a>
       <aside className="hidden w-56 shrink-0 flex-col gap-2 border-r border-line bg-side p-4 md:sticky md:top-0 md:flex md:h-screen md:self-start md:overflow-y-auto lg:w-64">
         <h1 className="mb-2 flex items-center gap-2 text-2xl font-extrabold text-ink"><span className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-onbrand"><Icon n="cloud" size={22} /></span>DriveEase</h1>
@@ -333,12 +467,12 @@ export default function App() {
       <div className="min-w-0 flex-1">
         <header className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b md:gap-3 border-line bg-card p-3">
           <button onClick={() => setDrawer(true)} aria-label="Buka menu navigasi" aria-expanded={drawer} className={SECOND + ' px-3! md:hidden'}><Icon n="menu" /></button>
-          <h1 className="flex items-center gap-2 min-w-0 flex-1 text-xl font-extrabold text-ink md:hidden"><Icon n="cloud" size={22} className="text-accent" /><span className="max-[400px]:sr-only">DriveEase</span></h1>
+          <h1 className="flex items-center gap-2 min-w-0 flex-1 text-xl font-extrabold text-ink md:hidden"><Icon n="cloud" size={22} className="text-accent" /><span>DriveEase</span></h1>
           <div className="order-last flex w-full items-center gap-2 md:contents">
           <div className="relative min-w-0 flex-1 md:order-first md:max-w-xl">
             <Icon n="search" className="pointer-events-none absolute left-3 top-3 text-sub" />
             <label htmlFor="cari" className="sr-only">Cari file berdasarkan nama</label>
-            <input id="cari" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Cari file berdasarkan nama"
+            <input id="cari" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Cari file"
               className="min-h-11 w-full rounded-xl border border-edge bg-card pl-10 pr-3 placeholder:text-sub" />
           </div>
           <div className="relative shrink-0 md:hidden">
@@ -413,9 +547,9 @@ export default function App() {
             grid ? (
             <ul className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
               {list.map(f => (
-                <li key={f.id} className="relative rounded-2xl border border-line bg-card">
+                <li key={f.id} data-item={f.id} className="relative rounded-2xl border border-line bg-card">
                   {starBtn(f, 'absolute right-1 top-1')}
-                  {infoBtn(f, 'absolute left-1 top-1')}
+                  {moreBtn(f, 'absolute left-1 top-1')}
                   <button onClick={() => openItem(f)} aria-label={f.type === 'Folder' && !f.trash ? `Buka folder ${f.name}` : `Lihat detail ${f.name}`} title={f.name} className="flex min-h-36 w-full min-w-0 flex-col items-center gap-2 rounded-2xl p-3 pt-9 text-center hover:bg-sel">
                     <span className={`${iconBox(f)} h-16 w-16 rounded-2xl`}><Icon n={f.type === 'Folder' ? 'folder' : 'file'} size={32} /></span>
                     <span className="line-clamp-2 w-full break-words font-semibold">{f.name}</span>
@@ -427,7 +561,7 @@ export default function App() {
             <ul className="rounded-xl border border-line bg-card">
               <li aria-hidden="true" className="hidden grid-cols-[1fr_7rem_6rem_8rem] gap-3 border-b border-line py-2 pl-[4.25rem] pr-16 text-sm font-semibold text-sub sm:grid"><span>Nama</span><span>Tipe</span><span>Ukuran</span><span>Diubah</span></li>
               {list.map(f => (
-                <li key={f.id} className="flex items-center gap-1 border-b border-line px-2 py-1 last:border-b-0">
+                <li key={f.id} data-item={f.id} className="flex items-center gap-1 border-b border-line px-2 py-1 last:border-b-0">
                   {starBtn(f)}
                   <button onClick={() => openItem(f)} aria-label={f.type === 'Folder' && !f.trash ? `Buka folder ${f.name}` : `Lihat detail ${f.name}`} title={f.name} className="min-h-11 min-w-0 flex-1 rounded-xl px-2 py-1 text-left hover:bg-sel sm:grid sm:grid-cols-[1fr_7rem_6rem_8rem] sm:items-center sm:gap-3">
                     <span className="flex min-w-0 items-center gap-3">
@@ -441,7 +575,7 @@ export default function App() {
                     <span className="hidden text-sub sm:block">{fmt(f.size)}</span>
                     <span className="hidden text-sub sm:block">{f.mod}</span>
                   </button>
-                  {infoBtn(f)}
+                  {moreBtn(f)}
                 </li>))}
             </ul>))}
         </main>
@@ -455,6 +589,40 @@ export default function App() {
             {refreshing ? 'Memperbarui daftar…' : pull >= 64 ? 'Lepaskan untuk memperbarui' : 'Tarik ke bawah untuk memperbarui'}
           </div>
         </div>)}
+      {renameId !== null && byId[renameId] && (
+        <Modal title={`Ganti nama ${byId[renameId].type === 'Folder' ? 'folder' : 'file'}`} onClose={() => setRenameId(null)}>
+          <form onSubmit={doRename} noValidate className="flex flex-col gap-3">
+            <label htmlFor="rn" className="font-semibold">Nama baru</label>
+            <input id="rn" autoFocus onFocus={e => e.target.select()} value={renameVal} onChange={e => { setRenameVal(e.target.value); setRenameErr('') }} aria-invalid={!!renameErr} aria-describedby={renameErr ? 'rn-err' : undefined} className="min-h-11 rounded-xl border border-edge bg-card px-3" />
+            {renameErr && <p id="rn-err" role="alert" className="font-semibold text-bad"><Icon n="alert" size={18} className="mr-1 inline" />{renameErr}</p>}
+            <div className="flex flex-wrap gap-2"><button type="submit" className={PRIMARY}>Simpan</button><button type="button" onClick={() => setRenameId(null)} className={SECOND}>Batal</button></div>
+          </form>
+        </Modal>)}
+      {itemId !== null && byId[itemId] && (() => {
+        const f = byId[itemId], bad = new Set([f.id])
+        const desc = id => files.filter(x => x.parent === id).forEach(x => { bad.add(x.id); desc(x.id) })
+        desc(f.id)
+        const opts = files.filter(x => x.type === 'Folder' && !inTrash(x) && !bad.has(x.id))
+        return (
+          <Modal title={`Atur / Kelola`} onClose={() => setItemId(null)}>
+            <p className="break-words font-semibold">{f.name}</p>
+            <p className="break-words text-sm text-sub">Lokasi: {pathStr(f)}</p>
+            <button aria-pressed={f.star} onClick={() => { patch(f.id, { star: !f.star }); setToast(f.star ? 'Dihapus dari Berbintang.' : 'Ditambahkan ke Berbintang.') }} className={SECOND + ' mt-3'}><Icon n="star" fill={f.star} className="text-accent" />{f.star ? 'Hapus dari Berbintang' : 'Tambahkan ke Berbintang'}</button>
+            <label htmlFor="mv" className="mt-4 block font-semibold">Pindahkan ke</label>
+            <select id="mv" value={moveTo} onChange={e => { setMoveTo(e.target.value); setMoveErr('') }} className="mt-1 block min-h-11 w-full rounded-xl border border-edge bg-card px-2">
+              <option value="">Drive Saya</option>
+              {opts.map(o => <option key={o.id} value={o.id}>{pathStr(o)} / {o.name}</option>)}
+            </select>
+            {moveErr && <p role="alert" className="mt-2 font-semibold text-bad"><Icon n="alert" size={18} className="mr-1 inline" />{moveErr}</p>}
+            <button onClick={() => doMove(f)} className={PRIMARY + ' mt-3'}>Pindahkan</button>
+          </Modal>)
+      })()}
+      {trashAsk !== null && byId[trashAsk] && (
+        <Modal title="Pindahkan ke Sampah?" onClose={() => setTrashAsk(null)}>
+          <p>"{byId[trashAsk].name}" akan dipindahkan ke Sampah. {byId[trashAsk].type === 'Folder' ? 'Isi folder ikut disembunyikan dan tidak dihitung di penyimpanan. ' : ''}Anda masih bisa mengembalikannya dari menu Sampah.</p>
+          <div className="mt-4 flex flex-wrap gap-2"><button onClick={confirmTrash} className={DANGER}><Icon n="trash" />Pindahkan ke Sampah</button><button autoFocus onClick={() => setTrashAsk(null)} className={SECOND}>Batal</button></div>
+        </Modal>)}
+      {ctx && <Menu key={`${ctx.x}-${ctx.y}-${ctx.id}`} x={ctx.x} y={ctx.y} items={menuItems()} onClose={() => setCtx(null)} />}
       {dlg === 'full' && (
         <Modal title="Penyimpanan Simulasi Penuh" onClose={() => setDlg(null)}>
           <div className="flex items-start gap-3"><Icon n="alert" size={28} className="mt-0.5 text-bad" /><p>Kapasitas penyimpanan simulasi telah mencapai batas maksimum. File baru yang ukurannya melebihi ruang tersedia tidak dapat ditambahkan dalam skenario ini.</p></div>
@@ -542,7 +710,7 @@ export default function App() {
             <Icon n="upload" size={28} className="mx-auto mb-2 text-accent" />
             <p className="mb-3 font-semibold">Seret file ke sini</p>
             <input ref={input} type="file" multiple className="hidden" onChange={e => { addFiles(e.target.files); e.target.value = '' }} aria-label="Pilih file dari perangkat" />
-            <button onClick={() => input.current.click()} className={PRIMARY}>Pilih file dari perangkat</button>
+            <div className="flex flex-wrap justify-center gap-2"><button onClick={() => input.current.click()} className={PRIMARY}>Pilih file dari perangkat</button><button onClick={() => dirInput.current.click()} className={SECOND + ' max-md:hidden'}><Icon n="folderup" />Pilih folder</button></div>
             <p className="mt-2 text-sm text-sub">Ukuran maksimal 50 MB per file.</p>
           </div>
           <div className="mt-3"><label htmlFor="net" className="font-semibold">Simulasi kondisi jaringan</label>
@@ -572,7 +740,7 @@ export default function App() {
         </Modal>)}
 
       {selFile && (
-        <Modal title={confirmPublic ? 'Bagikan ke siapa saja?' : 'Detail file'} onClose={() => { setSel(null); setConfirmPublic(false) }}>
+        <Modal title={confirmPublic ? 'Bagikan ke siapa saja?' : selMode === 'share' ? 'Bagikan' : selFile.type === 'Folder' ? 'Informasi Folder' : 'Informasi File'} onClose={() => { setSel(null); setConfirmPublic(false); setSelMode('info') }}>
           {confirmPublic ? (
             <div className="flex flex-col gap-3">
               <p>Siapa saja yang memiliki tautan dapat membuka <strong>{selFile.name}</strong>, termasuk orang yang tidak Anda kenal jika tautan disebarkan. Jangan bagikan file yang berisi data pribadi.</p>
@@ -586,18 +754,21 @@ export default function App() {
                 <dt className="font-semibold">Tipe</dt><dd>{selFile.type}</dd>
                 <dt className="font-semibold">Ukuran</dt><dd>{fmt(selFile.size)}</dd>
                 <dt className="font-semibold">Diubah</dt><dd>{selFile.mod}</dd>
+                <dt className="font-semibold">Lokasi</dt><dd className="break-words">{pathStr(selFile)}</dd>
+                {selFile.type === 'Folder' && <><dt className="font-semibold">Isi</dt><dd>{files.filter(x => x.parent === selFile.id && !x.trash).length} item ({fmt(sizeOf(selFile))})</dd></>}
+                <dt className="font-semibold">Berbintang</dt><dd>{selFile.star ? 'Ya' : 'Tidak'}</dd>
               </dl>
               <fieldset className="rounded-xl border border-edge p-3">
                 <legend className="px-1 font-semibold">Siapa yang bisa membuka?</legend>
                 {[['private', 'Hanya saya'], ['public', 'Siapa saja yang memiliki tautan']].map(([v, l]) => (
-                  <label key={v} className="flex min-h-11 items-center gap-3"><input type="radio" name="share" className="h-5 w-5" checked={selFile.share === v} onChange={() => setShare(v)} />{l}</label>))}
+                  <label key={v} className="flex min-h-11 items-center gap-3"><input type="radio" name="share" className="h-5 w-5" checked={selFile.share === v} autoFocus={selMode === 'share' && selFile.share === v} onChange={() => setShare(v)} />{l}</label>))}
                 <p className="text-sm text-sub">Pilihan awal selalu "Hanya saya". (Simulasi: belum ada tautan nyata.)</p>
               </fieldset>
               <div className="flex flex-wrap gap-2">
                 {selFile.type === 'Folder' && !selFile.trash && <button onClick={() => { openFolder(selFile); setSel(null) }} className={PRIMARY}>Buka folder</button>}
                 {selFile.trash
                   ? <button onClick={() => { patch(sel, { trash: false }); setSel(null); setToast('File dikembalikan.') }} className={PRIMARY}>Kembalikan file</button>
-                  : <button onClick={() => { patch(sel, { trash: true }); setSel(null); setToast(`"${selFile.name}" dipindahkan ke Sampah.`) }} className={SECOND}>Pindahkan ke Sampah</button>}
+                  : <button onClick={() => { setTrashAsk(selFile.id); setSel(null) }} className={SECOND}>Pindahkan ke Sampah</button>}
               </div>
             </div>)}
         </Modal>)}

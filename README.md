@@ -65,3 +65,8 @@ Buka **Profil**: baris "Versi build" menampilkan kode commit (di GitHub Pages) a
 
 ## Folder bersarang
 Setiap item punya `parent` (id folder, `null` = Drive Saya). Klik folder untuk masuk (File Saya), breadcrumb dan tombol kembali untuk naik, folder kosong menampilkan "Folder ini kosong". Folder/upload baru masuk ke folder yang sedang dibuka. Memindahkan folder ke Sampah juga menyembunyikan isinya dan tidak menghitungnya di penyimpanan; mengembalikannya memulihkan isinya. Pencarian mencari di seluruh DriveEase. Tombol **Detail** (ikon info) membuka rincian item, termasuk folder.
+
+## Menu konteks & tiga titik
+- **Desktop (mouse):** klik kanan di area kosong: Upload File, Upload Folder, Buat Folder Baru. Klik kanan pada file/folder: Download, Ganti Nama, Bagikan, Atur / Kelola (bintang + pindah folder), Informasi, Pindahkan ke Sampah (dengan konfirmasi). Menu tertutup dengan Escape, klik di luar, atau Tab; posisi dijaga tetap di layar; tidak muncul di input, dialog, atau layar sentuh.
+- **Semua perangkat:** tombol tiga titik di tiap baris/kartu membuka menu yang sama (nyaman di HP). Di HP tidak ada menu klik kanan; "+ Baru" untuk folder/upload.
+- **Simulasi:** Download file contoh menghasilkan berkas placeholder `.txt`; file yang Anda unggah diunduh dengan isi aslinya (tersimpan di memori sampai halaman dimuat ulang). Download folder = daftar isi `.txt`, bukan ZIP. Upload folder membuat struktur folder di data aplikasi lalu mengantre file-nya.
